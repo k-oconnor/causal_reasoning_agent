@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence, TYPE_CHECKING
+from typing import Any, Callable, Mapping, Sequence, TYPE_CHECKING
 
 from causal_agent.actions import (
     ActionSchemaError,
@@ -44,9 +44,11 @@ from causal_agent.kripke import KripkeModel
 from causal_agent.memory import MemoryStore
 from causal_agent.llm import BaseLLM
 from causal_agent.prompts import REACTIVE_SYSTEM
+from causal_agent.tool_loop import run_tool_loop
+from causal_agent.tools import ToolRegistry
 
 if TYPE_CHECKING:
-    pass
+    from causal_agent.acting import GameAction
 
 
 # ---------------------------------------------------------------------------
@@ -104,10 +106,18 @@ class Planner:
         llm: BaseLLM,
         simulate_before_plan: bool = True,
         max_parse_retries: int = 1,
+        system: str | None = None,
+        tools: ToolRegistry | None = None,
+        preview: Callable[[str, "GameAction"], dict | None] | None = None,
+        max_tool_calls: int = 8,
     ) -> None:
         self._llm = llm
         self._simulate = simulate_before_plan
         self._max_parse_retries = max_parse_retries
+        self._system = system or self.SYSTEM_PROMPT
+        self._tools = tools
+        self._preview = preview
+        self._max_tool_calls = max_tool_calls
 
     # ------------------------------------------------------------------
     # Public API
@@ -139,6 +149,7 @@ class Planner:
             raise ValueError("Planner.plan() requires at least one legal action spec.")
 
         intervention_notes: list[str] = []
+        preview_notes = self._preview_notes(agent_id, specs)
 
         if self._simulate and action_types:
             for action in action_types:
@@ -154,11 +165,13 @@ class Planner:
             agent_id=agent_id,
             action_specs=specs,
             intervention_notes=intervention_notes,
+            preview_notes=preview_notes,
         )
 
         plan_schema = structured_plan_schema(specs)
         last_error = ""
         plan: Plan | None = None
+        active_tools = self._active_tools(kripke)
 
         for attempt in range(self._max_parse_retries + 1):
             retry_prompt = prompt
@@ -169,11 +182,22 @@ class Planner:
                     "Return a corrected JSON object using the same action schemas."
                 )
             try:
-                raw = self._llm.complete_structured(
-                    retry_prompt,
-                    schema=plan_schema,
-                    system=self.SYSTEM_PROMPT,
-                )
+                if active_tools:
+                    try:
+                        raw = self._complete_with_tools(retry_prompt, active_tools)
+                    except NotImplementedError:
+                        active_tools = None
+                        raw = self._llm.complete_structured(
+                            retry_prompt,
+                            schema=plan_schema,
+                            system=self._system,
+                        )
+                else:
+                    raw = self._llm.complete_structured(
+                        retry_prompt,
+                        schema=plan_schema,
+                        system=self._system,
+                    )
                 plan = self._parse_response(raw, specs)
                 break
             except (ActionSchemaError, PlanParseError, ValueError) as exc:
@@ -229,6 +253,7 @@ class Planner:
         agent_id: str,
         action_specs: Sequence[ActionSpec],
         intervention_notes: list[str],
+        preview_notes: list[str] | None = None,
     ) -> str:
         sections: list[str] = []
 
@@ -247,6 +272,14 @@ class Planner:
             )
             sections.extend(intervention_notes)
 
+        if preview_notes:
+            sections.append("--- ACTION PREVIEWS ---")
+            sections.append(
+                "Read-only consequences for candidate action payloads. "
+                "Use these to compare immediate outcomes before committing."
+            )
+            sections.extend(preview_notes)
+
         sections.append("--- LEGAL ACTION SCHEMAS ---")
         sections.append(format_action_specs_for_prompt(action_specs))
 
@@ -257,6 +290,71 @@ class Planner:
         )
 
         return "\n\n".join(sections)
+
+    def _active_tools(self, kripke: KripkeModel) -> ToolRegistry | None:
+        registry = self._tools
+        if registry is not None and getattr(registry, "use_kripke_tools", False):
+            from causal_agent.kripke_tools import KripkeToolset
+
+            KripkeToolset(lambda: kripke).register_all(registry)
+        return registry if registry and len(registry) > 0 else None
+
+    def _complete_with_tools(self, prompt: str, registry: ToolRegistry) -> str:
+        result = run_tool_loop(
+            llm=self._llm,
+            registry=registry,
+            messages=[{"role": "user", "content": prompt}],
+            system=self._system,
+            max_iterations=self._max_tool_calls,
+        )
+        return result.content
+
+    def _preview_notes(
+        self,
+        agent_id: str,
+        action_specs: Sequence[ActionSpec],
+    ) -> list[str]:
+        if self._preview is None:
+            return []
+
+        from causal_agent.acting import GameAction
+
+        notes: list[str] = []
+        seen: set[str] = set()
+
+        for spec in action_specs:
+            examples = spec.examples or [spec.fallback_payload()]
+            for example in examples:
+                payload: dict[str, Any] = dict(example)
+                try:
+                    payload = spec.validate_payload(example)
+                    key = json.dumps(
+                        {"action_type": spec.action_type, "payload": payload},
+                        sort_keys=True,
+                        default=str,
+                    )
+                    if key in seen:
+                        continue
+                    seen.add(key)
+
+                    action = GameAction(
+                        action_type=spec.action_type,
+                        payload=payload,
+                        agent_id=agent_id,
+                    )
+                    result = self._preview(agent_id, action)
+                except Exception as exc:
+                    result = {"error": str(exc)}
+
+                if result is None:
+                    continue
+
+                notes.append(
+                    f"[{spec.action_type} {json.dumps(payload, sort_keys=True, default=str)}]: "
+                    f"{json.dumps(result, sort_keys=True, default=str)}"
+                )
+
+        return notes
 
     def _parse_response(
         self,

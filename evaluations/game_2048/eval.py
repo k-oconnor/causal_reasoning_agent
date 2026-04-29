@@ -26,14 +26,15 @@ from causal_agent import (
     FeedbackProcessor,
     MemoryEntry,
     MemoryStore,
-    Planner,
 )
 from causal_agent.acting import GameAction
 from evaluations.common import (
     TraceLogger,
     add_llm_args,
+    build_planner,
     build_llm,
     dataclass_to_dict,
+    plan_action_with_retry,
     write_summary,
 )
 from games.game_2048 import Game2048Env
@@ -141,7 +142,7 @@ def run_episode(
     rng = random.Random(seed)
     env = Game2048Env(seed=seed, agent_id="Agent")
     policy = POLICIES.get(policy_name)
-    planner = Planner(llm, simulate_before_plan=False) if policy_name == "llm" else None
+    planner = build_planner(env, llm, agent_id="Agent") if policy_name == "llm" else None
     actor = Actor()
     feedback_processor = FeedbackProcessor()
     memory = MemoryStore(max_short_term=80)
@@ -176,7 +177,9 @@ def run_episode(
                 action_specs = env.action_specs("Agent")
                 if planner is None:
                     raise RuntimeError("LLM policy was selected without a planner.")
-                plan = planner.plan(
+                plan, action, invalid_count = plan_action_with_retry(
+                    planner=planner,
+                    actor=actor,
                     kripke=kripke,
                     memory=memory,
                     goal=(
@@ -185,8 +188,9 @@ def run_episode(
                     ),
                     agent_id="Agent",
                     action_specs=action_specs,
+                    turn=turn,
                 )
-                action = actor.act(plan, action_specs, "Agent")
+                invalid_moves += invalid_count
                 direction = str(action.payload["direction"])
             else:
                 if policy is None:
@@ -198,6 +202,27 @@ def run_episode(
                     agent_id="Agent",
                 )
             feedback = env.step("Agent", action)
+            if feedback.get("kind") == "illegal_move" and policy_name == "llm":
+                invalid_moves += 1
+                action_specs = env.action_specs("Agent")
+                if action_specs and planner is not None:
+                    plan, action, invalid_count = plan_action_with_retry(
+                        planner=planner,
+                        actor=actor,
+                        kripke=kripke,
+                        memory=memory,
+                        goal=(
+                            "Play 2048 well: maximize score, preserve empty cells, "
+                            "build larger tiles, and avoid terminal boards."
+                        ),
+                        agent_id="Agent",
+                        action_specs=action_specs,
+                        turn=turn,
+                        error_context=feedback["content"],
+                    )
+                    invalid_moves += invalid_count
+                    direction = str(action.payload["direction"])
+                    feedback = env.step("Agent", action)
             turns = turn + 1
             if feedback.get("kind") == "illegal_move":
                 invalid_moves += 1
