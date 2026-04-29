@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from causal_agent import SkillBootstrapper, SkillSpec
 from causal_agent.llm import BaseLLM
-from causal_agent.tools import LLMResponse, ToolCall
+from causal_agent.tools import LLMResponse, ToolCall, ToolDefinition, ToolRegistry
 
 
 class _NoCallLLM(BaseLLM):
@@ -124,6 +125,145 @@ class SkillBootstrapTests(unittest.TestCase):
                     [SkillSpec("../bad.md", "Bad", "Must not escape root.")],
                     _NoCallLLM(),
                 )
+
+    def test_save_rejects_non_research_disclaimer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = _ToolCallingLLM([
+                ToolCall(
+                    id="call_1",
+                    name="save_skill",
+                    arguments={
+                        "filename": "strategy.md",
+                        "content": (
+                            "# Strategy\n\nI cannot directly execute web searches.\n\n"
+                            "## Sources\n- https://example.com"
+                        ),
+                    },
+                )
+            ])
+
+            with self.assertRaises(RuntimeError):
+                SkillBootstrapper(
+                    skills_root=tmp,
+                    enable_research=False,
+                    max_iterations=1,
+                ).ensure_skills(
+                    "2048",
+                    [SkillSpec("strategy.md", "2048 strategy", "Contains sources.")],
+                    llm,
+                )
+
+            self.assertFalse((Path(tmp) / "2048" / "strategy.md").exists())
+
+    def test_save_rejects_whole_file_markdown_fence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = _ToolCallingLLM([
+                ToolCall(
+                    id="call_1",
+                    name="save_skill",
+                    arguments={
+                        "filename": "strategy.md",
+                        "content": (
+                            "```markdown\n# Strategy\n\nPrefer corners.\n\n"
+                            "## Sources\n- https://example.com\n```"
+                        ),
+                    },
+                )
+            ])
+
+            with self.assertRaises(RuntimeError):
+                SkillBootstrapper(
+                    skills_root=tmp,
+                    enable_research=False,
+                    max_iterations=1,
+                ).ensure_skills(
+                    "2048",
+                    [SkillSpec("strategy.md", "2048 strategy", "Contains sources.")],
+                    llm,
+                )
+
+    def test_save_requires_sources_with_urls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = _ToolCallingLLM([
+                ToolCall(
+                    id="call_1",
+                    name="save_skill",
+                    arguments={
+                        "filename": "strategy.md",
+                        "content": "# Strategy\n\nPrefer corners.\n\n## Sources\n- no url here",
+                    },
+                )
+            ])
+
+            with self.assertRaises(RuntimeError):
+                SkillBootstrapper(
+                    skills_root=tmp,
+                    enable_research=False,
+                    max_iterations=1,
+                ).ensure_skills(
+                    "2048",
+                    [SkillSpec("strategy.md", "2048 strategy", "Contains sources.")],
+                    llm,
+                )
+
+    def test_audit_log_records_save_skill_tool_events(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            audit_path = Path(tmp) / "skill_bootstrap.jsonl"
+            llm = _ToolCallingLLM([
+                ToolCall(
+                    id="call_1",
+                    name="save_skill",
+                    arguments={
+                        "filename": "strategy.md",
+                        "content": "# Strategy\n\nPrefer corners.\n\n## Sources\n- https://example.com",
+                    },
+                )
+            ])
+
+            SkillBootstrapper(
+                skills_root=Path(tmp) / "skills",
+                enable_research=False,
+                audit_log_path=audit_path,
+            ).ensure_skills(
+                "2048",
+                [SkillSpec("strategy.md", "2048 strategy", "Contains sources.")],
+                llm,
+            )
+
+            events = [json.loads(line) for line in audit_path.read_text().splitlines()]
+            self.assertEqual([event["event"] for event in events], ["tool_request", "tool_result"])
+            self.assertEqual(events[0]["tool"], "save_skill")
+            self.assertEqual(events[0]["requested_by"], "llm")
+            self.assertFalse(events[1]["is_error"])
+
+    def test_audit_log_records_research_tool_events(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            audit_path = Path(tmp) / "skill_bootstrap.jsonl"
+            bootstrapper = SkillBootstrapper(
+                skills_root=tmp,
+                enable_research=False,
+                audit_log_path=audit_path,
+            )
+            registry = ToolRegistry()
+            registry.register(
+                ToolDefinition(
+                    name="web_search",
+                    description="Fake search.",
+                    parameters={"type": "object", "properties": {}, "required": []},
+                ),
+                lambda query: f"URL: https://example.com\nResult for {query}",
+            )
+
+            bootstrapper._dispatch_with_audit(  # noqa: SLF001 - targeted audit test
+                registry,
+                ToolCall(id="search_1", name="web_search", arguments={"query": "2048"}),
+                requested_by="framework",
+            )
+
+            events = [json.loads(line) for line in audit_path.read_text().splitlines()]
+            self.assertEqual(events[0]["tool"], "web_search")
+            self.assertEqual(events[0]["requested_by"], "framework")
+            self.assertIn("https://example.com", events[1]["content"])
 
 
 if __name__ == "__main__":

@@ -184,6 +184,15 @@ def structured_plan_schema(action_specs: Sequence[ActionSpec | str]) -> dict[str
                 "type": "string",
                 "description": "Brief explanation safe to log; do not include hidden chain of thought.",
             },
+            "skill_refs": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Names of skill documents used for this decision, e.g. "
+                    "2048/strategy or mastermind/candidate_filtering. Return [] "
+                    "if no skill document influenced the decision."
+                ),
+            },
         },
     }
 

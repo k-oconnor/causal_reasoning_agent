@@ -46,6 +46,7 @@ class ActionSchemaTests(unittest.TestCase):
         schema = structured_plan_schema([spec])
 
         self.assertEqual(schema["properties"]["action_type"]["enum"], ["slide"])
+        self.assertIn("skill_refs", schema["properties"])
         self.assertIn("parameters", schema["required"])
 
     def test_actor_rejects_invalid_payload(self) -> None:
@@ -139,6 +140,7 @@ class PlannerStructuredOutputTests(unittest.TestCase):
                     "action_type": "slide",
                     "parameters": {"direction": "left"},
                     "public_rationale": "follow corner strategy",
+                    "skill_refs": ["2048/strategy"],
                 }
 
         llm = CaptureLLM()
@@ -148,7 +150,7 @@ class PlannerStructuredOutputTests(unittest.TestCase):
             skill_docs=["### 2048/strategy\n\nKeep the largest tile in a stable corner."],
         )
 
-        planner.plan(
+        plan = planner.plan(
             kripke=self.kripke,
             memory=self.memory,
             goal="move",
@@ -158,6 +160,7 @@ class PlannerStructuredOutputTests(unittest.TestCase):
 
         self.assertIn("--- SKILL LIBRARY ---", llm.prompt)
         self.assertIn("stable corner", llm.prompt)
+        self.assertEqual(plan.skill_refs, ["2048/strategy"])
 
 
 if __name__ == "__main__":

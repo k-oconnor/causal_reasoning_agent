@@ -64,6 +64,7 @@ class Plan:
     action_type      : which action category to take (e.g. "speak", "vote").
     parameters       : action-specific payload (message text, target player…).
     reasoning        : brief public rationale from the LLM.
+    skill_refs       : skill document names the LLM reports using.
     supporting_worlds: world ids from the KripkeModel that support this plan.
     intervention_notes: summaries of any counterfactual simulations run.
     """
@@ -71,6 +72,7 @@ class Plan:
     action_type: str
     parameters: dict[str, Any] = field(default_factory=dict)
     reasoning: str = ""
+    skill_refs: list[str] = field(default_factory=list)
     supporting_worlds: list[str] = field(default_factory=list)
     intervention_notes: list[str] = field(default_factory=list)
 
@@ -245,6 +247,12 @@ class Planner:
         if self._skill_docs:
             sections.append("--- SKILL LIBRARY ---")
             sections.extend(doc.strip() for doc in self._skill_docs)
+            sections.append(
+                "When a skill document influences your decision, include its name "
+                "in the `skill_refs` array. Use the heading name without `###`, "
+                "for example `2048/strategy`. If no skill influenced the decision, "
+                "return an empty array."
+            )
 
         if intervention_notes:
             sections.append("--- INTERVENTION SIMULATIONS ---")
@@ -258,7 +266,8 @@ class Planner:
 
         sections.append(
             "--- YOUR TASK ---\n"
-            "Output a JSON object with keys: intent, action_type, parameters, public_rationale.\n"
+            "Output a JSON object with keys: intent, action_type, parameters, "
+            "public_rationale, and skill_refs.\n"
             "Choose action_type from the legal action schemas and make parameters match that schema."
         )
 
@@ -288,12 +297,16 @@ class Planner:
 
         validated_parameters = by_type[action_type].validate_payload(parameters)
         public_rationale = data.get("public_rationale", data.get("reasoning", ""))
+        raw_skill_refs = data.get("skill_refs", [])
+        if not isinstance(raw_skill_refs, list):
+            raw_skill_refs = []
 
         return Plan(
             intent=str(data.get("intent", "unknown")),
             action_type=action_type,
             parameters=validated_parameters,
             reasoning=str(public_rationale),
+            skill_refs=[str(ref) for ref in raw_skill_refs],
         )
 
     def _coerce_response_dict(self, raw: str | Mapping[str, Any]) -> dict[str, Any]:

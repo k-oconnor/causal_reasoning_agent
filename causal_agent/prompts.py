@@ -232,6 +232,7 @@ Output a JSON object with exactly these keys:
   action_type  – the action to take (must be from the legal action schemas).
   parameters   – a dict matching the chosen action's payload schema.
   public_rationale – a short explanation safe to log.
+  skill_refs   – list of skill document names used, or [] if none.
 
 Output ONLY valid JSON — no markdown fences, no extra text.
 """.strip()

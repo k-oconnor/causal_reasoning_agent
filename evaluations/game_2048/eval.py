@@ -247,6 +247,7 @@ def run_episode(
                 "feedback": feedback["content"],
                 "intent": plan.intent if plan else "",
                 "rationale": plan.reasoning if plan else "",
+                "skill_refs": plan.skill_refs if plan else [],
                 "board_after": env.board,
                 "score": env.score,
                 "max_tile": max_tile(env.board),
@@ -304,6 +305,7 @@ def run(args: argparse.Namespace) -> None:
         llm=llm,
         model_name=args.model,
         disabled=args.no_skill_bootstrap,
+        log_dir=log_dir,
     ) if args.policy == "llm" else []
     results = [
         run_episode(

@@ -372,6 +372,7 @@ def run_episode(
                 "remaining_candidates_after": after_remaining,
                 "intent": plan.intent if plan else "",
                 "rationale": plan.reasoning if plan else "",
+                "skill_refs": plan.skill_refs if plan else [],
                 "solved": env.is_terminal and bool(feedback.get("reward", 0.0) > 0),
                 "terminal": env.is_terminal,
             }
@@ -437,6 +438,7 @@ def run(args: argparse.Namespace) -> None:
         llm=llm,
         model_name=args.model,
         disabled=args.no_skill_bootstrap,
+        log_dir=log_dir,
     ) if args.policy == "llm" else []
     results = [
         run_episode(
