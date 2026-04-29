@@ -13,6 +13,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from causal_agent.actions import ActionSpec
+
 if TYPE_CHECKING:
     from causal_agent.acting import GameAction
     from causal_agent.kripke import KripkeModel
@@ -33,8 +35,12 @@ class GameEnvironment(ABC):
         Apply `action` for `agent_id` and advance the game state.
         Return a raw feedback dict (same schema as observe).
 
+    action_specs(agent_id)
+        Return the legal ActionSpec objects for `agent_id` right now. This is
+        the canonical contract used by planning and acting.
+
     valid_actions(agent_id)
-        Return the list of action_type strings legal for `agent_id` right now.
+        Compatibility helper returning the legal action_type strings.
 
     is_terminal
         True when the game has reached an end condition.
@@ -55,9 +61,13 @@ class GameEnvironment(ABC):
         ...
 
     @abstractmethod
-    def valid_actions(self, agent_id: str) -> list[str]:
-        """Legal action types for agent_id this turn."""
+    def action_specs(self, agent_id: str) -> list[ActionSpec]:
+        """Legal structured actions for agent_id this turn."""
         ...
+
+    def valid_actions(self, agent_id: str) -> list[str]:
+        """Legal action type names for legacy callers."""
+        return [spec.action_type for spec in self.action_specs(agent_id)]
 
     @property
     @abstractmethod
@@ -65,13 +75,14 @@ class GameEnvironment(ABC):
         """True when the game is over."""
         ...
 
-    @abstractmethod
     def initial_kripke(self, agent_id: str) -> "KripkeModel":
         """
         Build the agent's initial epistemic model.
 
-        Worlds correspond to all role/state assignments consistent with
-        what agent_id is told at game start.  Accessibility is derived
-        from which facts each other player has been told privately.
+        Games with hidden information can override this. Fully observable
+        games get a trivial one-world model by default, making the Kripke
+        module optional for puzzles such as 2048.
         """
-        ...
+        from causal_agent.kripke import KripkeModel, World
+
+        return KripkeModel(worlds=[World.from_dict("actual", {})])

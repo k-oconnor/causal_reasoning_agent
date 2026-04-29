@@ -15,10 +15,10 @@ import anything from planning or memory.
 
 Validation
 ----------
-Actor.act() checks that plan.action_type is in the supplied valid_actions
-list before emitting the action.  If invalid, it raises ActionError so
-Orchestration can catch it, log it as an ILLEGAL_MOVE feedback event,
-and request a replan rather than submitting a bad move.
+Actor.act() checks that plan.action_type is legal and validates the payload
+against the matching ActionSpec before emitting the action. If invalid, it
+raises ActionError so Orchestration can catch it, log it as an ILLEGAL_MOVE
+feedback event, and request a replan rather than submitting a bad move.
 
 Post-processing hooks
 ---------------------
@@ -30,8 +30,9 @@ player name casing, redact private information from public speech).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
+from causal_agent.actions import ActionSpec, action_spec_by_type, coerce_action_specs
 from causal_agent.planning import Plan
 
 
@@ -95,14 +96,14 @@ class Actor:
     def act(
         self,
         plan: Plan,
-        valid_actions: list[str],
+        valid_actions: Sequence[ActionSpec | str],
         agent_id: str,
     ) -> GameAction:
         """
         Parameters
         ----------
         plan         : Plan produced by the Planner.
-        valid_actions: legal action types for this agent this turn.
+        valid_actions: legal action specs or legacy action names for this turn.
         agent_id     : identifier of the acting agent.
 
         Returns
@@ -111,13 +112,13 @@ class Actor:
 
         Raises
         ------
-        ActionError if plan.action_type is not in valid_actions.
+        ActionError if action type or payload validation fails.
         """
-        self._validate(plan, valid_actions)
+        payload = self._validate(plan, valid_actions)
 
         action = GameAction(
             action_type=plan.action_type,
-            payload=dict(plan.parameters),
+            payload=payload,
             agent_id=agent_id,
         )
 
@@ -130,17 +131,27 @@ class Actor:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _validate(self, plan: Plan, valid_actions: list[str]) -> None:
-        if not valid_actions:
+    def _validate(
+        self,
+        plan: Plan,
+        valid_actions: Sequence[ActionSpec | str],
+    ) -> dict[str, Any]:
+        specs = coerce_action_specs(valid_actions)
+        if not specs:
             raise ActionError(
                 f"No valid actions available this turn; "
                 f"plan proposed {plan.action_type!r}."
             )
-        if plan.action_type not in valid_actions:
+        by_type = action_spec_by_type(specs)
+        if plan.action_type not in by_type:
             raise ActionError(
                 f"Planned action {plan.action_type!r} is not in "
-                f"valid actions {valid_actions}.  Replan required."
+                f"valid actions {list(by_type)}.  Replan required."
             )
+        try:
+            return by_type[plan.action_type].validate_payload(plan.parameters)
+        except ValueError as exc:
+            raise ActionError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Built-in post-processors (attach as needed)

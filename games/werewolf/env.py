@@ -38,6 +38,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from pydantic import BaseModel, Field, create_model
+
+from causal_agent.actions import ActionSpec, _ForbidExtraConfig, string_enum
 from games.base import GameEnvironment
 from causal_agent.kripke import KripkeModel, World
 from causal_agent.acting import GameAction
@@ -52,6 +55,18 @@ class Phase(str, Enum):
     DAY_VOTE    = "day_vote"
     NIGHT       = "night"
     ENDED       = "ended"
+
+
+class SpeakPayload(BaseModel):
+    message: str = Field(
+        ...,
+        min_length=1,
+        max_length=300,
+        description="Public message to say during the discussion phase.",
+    )
+
+    class Config:
+        extra = "forbid"
 
 
 # ---------------------------------------------------------------------------
@@ -219,21 +234,53 @@ class WerewolfEnv(GameEnvironment):
         result.setdefault("facts", {})
         return result
 
-    def valid_actions(self, agent_id: str) -> list[str]:
+    def action_specs(self, agent_id: str) -> list[ActionSpec]:
         if not self._players[agent_id].alive:
             return []
         if self._phase == Phase.DAY_DISCUSS:
             # The agent speaks when it is their turn in the speak order.
             if self._current_speaker() == agent_id:
-                return ["speak"]
+                return [
+                    ActionSpec(
+                        action_type="speak",
+                        description="Say one public discussion message.",
+                        payload_model=SpeakPayload,
+                        examples=[{
+                            "message": (
+                                "I do not have a strong read yet. "
+                                "Who has said something inconsistent?"
+                            )
+                        }],
+                    )
+                ]
             return []
         if self._phase == Phase.DAY_VOTE:
             if not self._players[agent_id].voted_for:
-                return ["vote"]
+                candidates = [p for p in self._alive_players() if p != agent_id]
+                if not candidates:
+                    return []
+                return [
+                    ActionSpec(
+                        action_type="vote",
+                        description="Vote to eliminate one living player other than yourself.",
+                        payload_model=_target_payload_model("WerewolfVotePayload", candidates),
+                        examples=[{"target": candidates[0]}],
+                    )
+                ]
             return []
         if self._phase == Phase.NIGHT:
             if self._players[agent_id].role == "werewolf":
-                return ["kill"]
+                candidates = [p for p in self._alive_players() if p != agent_id]
+                if not candidates:
+                    return []
+                return [
+                    ActionSpec(
+                        action_type="kill",
+                        description="As werewolf, kill one living player other than yourself.",
+                        payload_model=_target_payload_model("WerewolfKillPayload", candidates),
+                        examples=[{"target": candidates[0]}],
+                    )
+                ]
             return []
         return []
 
@@ -510,3 +557,15 @@ class WerewolfEnv(GameEnvironment):
             f"phase={self._phase.value}, "
             f"alive={self._alive_players()})"
         )
+
+
+def _target_payload_model(name: str, candidates: list[str]) -> type[BaseModel]:
+    target_type = string_enum(f"{name}Target", candidates)
+    return create_model(
+        name,
+        __config__=_ForbidExtraConfig,
+        target=(
+            target_type,
+            Field(..., description=f"One of: {', '.join(candidates)}."),
+        ),
+    )

@@ -29,11 +29,21 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
+from typing import Any, Mapping, Sequence, TYPE_CHECKING
 
+from causal_agent.actions import (
+    ActionSchemaError,
+    ActionSpec,
+    action_spec_by_type,
+    action_type_names,
+    coerce_action_specs,
+    format_action_specs_for_prompt,
+    structured_plan_schema,
+)
 from causal_agent.kripke import KripkeModel
 from causal_agent.memory import MemoryStore
 from causal_agent.llm import BaseLLM
+from causal_agent.prompts import REACTIVE_SYSTEM
 
 if TYPE_CHECKING:
     pass
@@ -53,7 +63,7 @@ class Plan:
     intent           : high-level goal for this step (natural language).
     action_type      : which action category to take (e.g. "speak", "vote").
     parameters       : action-specific payload (message text, target player…).
-    reasoning        : chain-of-thought explanation from the LLM.
+    reasoning        : brief public rationale from the LLM.
     supporting_worlds: world ids from the KripkeModel that support this plan.
     intervention_notes: summaries of any counterfactual simulations run.
     """
@@ -87,9 +97,17 @@ class Planner:
                            valid action and include the results in the prompt.
     """
 
-    def __init__(self, llm: BaseLLM, simulate_before_plan: bool = True) -> None:
+    SYSTEM_PROMPT = REACTIVE_SYSTEM
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        simulate_before_plan: bool = True,
+        max_parse_retries: int = 1,
+    ) -> None:
         self._llm = llm
         self._simulate = simulate_before_plan
+        self._max_parse_retries = max_parse_retries
 
     # ------------------------------------------------------------------
     # Public API
@@ -101,7 +119,8 @@ class Planner:
         memory: MemoryStore,
         goal: str,
         agent_id: str,
-        valid_actions: list[str],
+        valid_actions: list[str] | None = None,
+        action_specs: Sequence[ActionSpec | str] | None = None,
     ) -> Plan:
         """
         Produce a Plan given the current epistemic state and memory.
@@ -113,10 +132,16 @@ class Planner:
         3. Call the LLM.
         4. Parse the response into a Plan.
         """
+        specs = coerce_action_specs(action_specs or valid_actions or [])
+        action_types = action_type_names(specs)
+
+        if not specs:
+            raise ValueError("Planner.plan() requires at least one legal action spec.")
+
         intervention_notes: list[str] = []
 
-        if self._simulate and valid_actions:
-            for action in valid_actions:
+        if self._simulate and action_types:
+            for action in action_types:
                 note = self.evaluate_intervention(
                     kripke, {"last_action_type": action}, agent_id
                 )
@@ -127,13 +152,36 @@ class Planner:
             memory=memory,
             goal=goal,
             agent_id=agent_id,
-            valid_actions=valid_actions,
+            action_specs=specs,
             intervention_notes=intervention_notes,
         )
 
-        from causal_agent.prompts import REACTIVE_SYSTEM
-        raw = self._llm.complete(prompt, system=REACTIVE_SYSTEM)
-        plan = self._parse_response(raw, valid_actions)
+        plan_schema = structured_plan_schema(specs)
+        last_error = ""
+        plan: Plan | None = None
+
+        for attempt in range(self._max_parse_retries + 1):
+            retry_prompt = prompt
+            if last_error:
+                retry_prompt = (
+                    f"{prompt}\n\n"
+                    f"Your previous response was invalid: {last_error}\n"
+                    "Return a corrected JSON object using the same action schemas."
+                )
+            try:
+                raw = self._llm.complete_structured(
+                    retry_prompt,
+                    schema=plan_schema,
+                    system=self.SYSTEM_PROMPT,
+                )
+                plan = self._parse_response(raw, specs)
+                break
+            except (ActionSchemaError, PlanParseError, ValueError) as exc:
+                last_error = str(exc)
+
+        if plan is None:
+            plan = self._fallback_plan(specs, last_error)
+
         plan.intervention_notes = intervention_notes
 
         # Attach worlds consistent with the chosen action type as support
@@ -179,7 +227,7 @@ class Planner:
         memory: MemoryStore,
         goal: str,
         agent_id: str,
-        valid_actions: list[str],
+        action_specs: Sequence[ActionSpec],
         intervention_notes: list[str],
     ) -> str:
         sections: list[str] = []
@@ -199,47 +247,83 @@ class Planner:
             )
             sections.extend(intervention_notes)
 
-        sections.append("--- VALID ACTIONS ---")
-        sections.append(", ".join(valid_actions) if valid_actions else "(none)")
+        sections.append("--- LEGAL ACTION SCHEMAS ---")
+        sections.append(format_action_specs_for_prompt(action_specs))
 
         sections.append(
             "--- YOUR TASK ---\n"
-            "Output a JSON object with keys: intent, action_type, parameters, reasoning.\n"
-            "Choose the action_type from the valid actions list."
+            "Output a JSON object with keys: intent, action_type, parameters, public_rationale.\n"
+            "Choose action_type from the legal action schemas and make parameters match that schema."
         )
 
         return "\n\n".join(sections)
 
-    def _parse_response(self, raw: str, valid_actions: list[str]) -> Plan:
+    def _parse_response(
+        self,
+        raw: str | Mapping[str, Any],
+        action_specs: Sequence[ActionSpec | str],
+    ) -> Plan:
         """
-        Parse LLM JSON output into a Plan, with graceful fallback.
+        Parse and validate LLM output into a Plan.
         """
-        cleaned = raw.strip()
+        data = self._coerce_response_dict(raw)
+        by_type = action_spec_by_type(action_specs)
+        action_type = str(data.get("action_type", ""))
 
-        # Strip markdown fences if the model added them despite instructions.
+        if action_type not in by_type:
+            raise PlanParseError(
+                f"LLM chose unknown action_type {action_type!r}; "
+                f"expected one of {list(by_type)}."
+            )
+
+        parameters = data.get("parameters", {})
+        if not isinstance(parameters, Mapping):
+            raise PlanParseError("LLM parameters must be a JSON object.")
+
+        validated_parameters = by_type[action_type].validate_payload(parameters)
+        public_rationale = data.get("public_rationale", data.get("reasoning", ""))
+
+        return Plan(
+            intent=str(data.get("intent", "unknown")),
+            action_type=action_type,
+            parameters=validated_parameters,
+            reasoning=str(public_rationale),
+        )
+
+    def _coerce_response_dict(self, raw: str | Mapping[str, Any]) -> dict[str, Any]:
+        if isinstance(raw, Mapping):
+            return dict(raw)
+
+        cleaned = raw.strip()
         cleaned = re.sub(r"^```[a-z]*\n?", "", cleaned)
         cleaned = re.sub(r"\n?```$", "", cleaned)
 
         try:
             data = json.loads(cleaned)
         except json.JSONDecodeError:
-            # Last-resort: pull out anything that looks like JSON.
             match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-            if match:
-                try:
-                    data = json.loads(match.group())
-                except json.JSONDecodeError:
-                    data = {}
-            else:
-                data = {}
+            if not match:
+                raise PlanParseError(f"LLM did not return JSON: {raw!r}")
+            data = json.loads(match.group())
 
-        action_type = str(data.get("action_type", ""))
-        if action_type not in valid_actions and valid_actions:
-            action_type = valid_actions[0]
+        if not isinstance(data, dict):
+            raise PlanParseError("LLM plan response must be a JSON object.")
+        return data
 
+    def _fallback_plan(
+        self,
+        action_specs: Sequence[ActionSpec | str],
+        reason: str,
+    ) -> Plan:
+        specs = coerce_action_specs(action_specs)
+        spec = specs[0]
         return Plan(
-            intent=str(data.get("intent", "unknown")),
-            action_type=action_type,
-            parameters=data.get("parameters", {}),
-            reasoning=str(data.get("reasoning", raw)),
+            intent="fallback legal action",
+            action_type=spec.action_type,
+            parameters=spec.fallback_payload(),
+            reasoning=f"Fell back after invalid structured output: {reason}",
         )
+
+
+class PlanParseError(ValueError):
+    """Raised when the planner cannot parse a valid structured plan."""

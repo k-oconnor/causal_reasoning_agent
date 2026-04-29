@@ -30,6 +30,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 
+from causal_agent.actions import ActionSpec
 from causal_agent.acting import Actor, ActionError, GameAction
 from causal_agent.feedback import FeedbackEvent, FeedbackKind, FeedbackProcessor
 from causal_agent.kripke import KripkeModel
@@ -165,8 +166,8 @@ class Orchestrator:
                 break
 
             # ── 5. Plan ──────────────────────────────────────────────
-            valid_actions = self._env.valid_actions(self._cfg.agent_id)
-            if not valid_actions:
+            action_specs = self._env.action_specs(self._cfg.agent_id)
+            if not action_specs:
                 log.debug("Turn %d: no valid actions, skipping.", turn)
                 continue
 
@@ -175,7 +176,7 @@ class Orchestrator:
                 memory=self._memory,
                 goal=self._cfg.goal,
                 agent_id=self._cfg.agent_id,
-                valid_actions=valid_actions,
+                action_specs=action_specs,
             )
             self._memory.add(MemoryEntry(
                 turn=turn,
@@ -186,7 +187,7 @@ class Orchestrator:
             ))
 
             # ── 6. Act ───────────────────────────────────────────────
-            action = self._safe_act(plan, valid_actions, turn, result)
+            action = self._safe_act(plan, action_specs, turn, result)
             if action is None:
                 continue
 
@@ -213,7 +214,7 @@ class Orchestrator:
     def _safe_act(
         self,
         plan: Plan,
-        valid_actions: list[str],
+        action_specs: list[ActionSpec],
         turn: int,
         result: SessionResult,
     ) -> GameAction | None:
@@ -222,7 +223,7 @@ class Orchestrator:
         (if configured) or log the illegal move and skip this turn.
         """
         try:
-            return self._actor.act(plan, valid_actions, self._cfg.agent_id)
+            return self._actor.act(plan, action_specs, self._cfg.agent_id)
         except ActionError as exc:
             log.warning("Turn %d: illegal action — %s", turn, exc)
 
@@ -247,9 +248,9 @@ class Orchestrator:
                         memory=self._memory,
                         goal=self._cfg.goal,
                         agent_id=self._cfg.agent_id,
-                        valid_actions=valid_actions,
+                        action_specs=action_specs,
                     )
-                    return self._actor.act(replan, valid_actions, self._cfg.agent_id)
+                    return self._actor.act(replan, action_specs, self._cfg.agent_id)
                 except ActionError:
                     log.error("Turn %d: replan also failed; skipping turn.", turn)
 

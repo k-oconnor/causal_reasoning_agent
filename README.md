@@ -1,6 +1,6 @@
 # Causal Reasoning Agent
 
-An **LLM-agnostic agentic framework** for environments that require deliberate planning, multi-step reasoning, and grounded execution. The design keeps model providers interchangeable and evaluation environments pluggable — the same agent loop runs across social games, simulation evals, and any task that benefits from explicit epistemic state tracking.
+An **LLM-agnostic agentic framework** for environments that require deliberate planning, multi-step reasoning, grounded execution, and structured actions. It supports social games such as Werewolf, puzzle games such as 2048 and Mastermind, simulation evals, and any task that benefits from explicit epistemic state tracking. The design keeps model providers interchangeable and evaluation environments pluggable.
 
 ## Team
 
@@ -27,6 +27,8 @@ python -m examples.run_werewolf --model openai           # GPT-4o
 python -m examples.run_werewolf --model anthropic        # Claude
 python -m examples.run_werewolf --model gemini           # Gemini
 python -m examples.run_werewolf --model deepseek         # DeepSeek (cheap, good for testing)
+python -m examples.run_2048                              # 2048 with MockLLM
+python -m examples.run_mastermind                         # Mastermind with MockLLM
 ```
 
 ---
@@ -39,6 +41,7 @@ causal_reasoning_agent/
 │   ├── kripke.py               # World, KripkeModel — symbolic state + interventions
 │   ├── kripke_tools.py         # KripkeToolset — KripkeModel ops as LLM-callable tools
 │   ├── llm.py                  # BaseLLM + adapters: Mock, OpenAI, Anthropic, Gemini, DeepSeek
+│   ├── actions.py              # ActionSpec — Pydantic-backed game action schemas
 │   ├── prompts.py              # PLANNING_SYSTEM, REACTIVE_SYSTEM — boilerplate init prompts
 │   ├── tools.py                # ToolDefinition, ToolCall, LLMResponse, ToolRegistry
 │   ├── research_tools.py       # ResearchTools — Tavily (web_search) + Jina (fetch_page)
@@ -52,7 +55,9 @@ causal_reasoning_agent/
 │   └── log_config.py           # setup_logging(), get_logger()
 ├── games/
 │   ├── base.py                 # GameEnvironment ABC
-│   └── werewolf/env.py         # Werewolf implementation
+│   ├── werewolf/env.py         # Werewolf implementation
+│   ├── game_2048/env.py        # 2048 implementation
+│   └── mastermind/env.py       # Mastermind implementation
 ├── ksp_eval/                   # eval spec: mission instructions passed to the agent on init
 │   └── ksp_mun_orbit_agent_instructions.md
 ├── skills/                     # reference docs injected into the agent's context
@@ -62,7 +67,9 @@ causal_reasoning_agent/
 │   ├── krpc_basics.md
 │   └── krpc_expressions.md
 ├── examples/
-│   └── run_werewolf.py         # end-to-end demo
+│   ├── run_werewolf.py         # end-to-end demo
+│   ├── run_2048.py             # 2048 demo
+│   └── run_mastermind.py       # Mastermind demo
 ├── .env.example                # key template (copy → .env, never commit .env)
 └── requirements.txt
 ```
@@ -79,7 +86,7 @@ causal_reasoning_agent/
 | `--model gemini` | `GeminiLLM` | `google-generativeai` | `GOOGLE_API_KEY` |
 | `--model deepseek` | `DeepSeekLLM` | `openai` (compat.) | `DEEPSEEK_API_KEY` |
 
-All backends implement the same interface:
+All backends implement the same text interface, can optionally use provider-native tool calling, and can request provider-native structured outputs:
 
 ```python
 class BaseLLM(ABC):
@@ -94,6 +101,9 @@ class BaseLLM(ABC):
         system: str = "",
         **kwargs,
     ) -> LLMResponse: ...
+
+    # Structured completion — provider-native schema mode where available
+    def complete_structured(self, prompt: str, schema: dict, system: str = "", **kwargs) -> dict: ...
 ```
 
 `LLMResponse` carries either `tool_calls` (model wants to invoke a tool — caller executes and loops) or `content` (model is done). Every backend logs completions via the framework logger — see **Logging** below. `DeepSeekLLM` reuses the `openai` SDK pointed at `https://api.deepseek.com/v1` — no extra dependency.
@@ -283,7 +293,7 @@ The prompts are plain strings — feel free to inspect or print them before a ru
 
 ## Symbolic state and Kripke frames
 
-Planning and reasoning are grounded in an explicit **symbolic state space**: a compact representation of what could be true about the environment. Natural language stays at the boundary; deliberation runs over this shared object so it remains inspectable and verifiable.
+Planning and reasoning can be grounded in an explicit **symbolic state space**: a compact representation of what could be true about the environment. Natural language stays at the boundary; deliberation runs over this shared object so it remains inspectable and verifiable. Fully observable puzzle games can use the default trivial one-world model and skip intervention simulation.
 
 **Interventions** — counterfactuals such as "what if I took this action?" — are framed on a **Kripke model**: a set of **possible worlds** (complete coherent hypotheses), each assigning truth values to atomic facts, together with an **accessibility relation** `R_a` per agent `a`. World `v` is `R_a`-accessible from `u` when agent `a` cannot yet distinguish `v` from `u`. Observing new information **refines** accessibility (shrinks indistinguishable classes); interventions **restrict** which worlds remain or **update** relations to reflect what others could know after a hypothetical move.
 
@@ -329,7 +339,7 @@ env.step(action)  →  loops back
 Control loop for a session — turn order, environment ticks, when to call planning vs. acting, error handling, lifecycle. `AgentConfig` carries per-agent settings (goal string, max turns, replan-on-illegal flag).
 
 ### 2) Acting
-Turns high-level decisions into concrete environment actions. `Actor` validates `plan.action_type` against `valid_actions` before emitting a `GameAction`. Post-processor hooks apply environment-specific transforms after validation.
+Turns high-level decisions into concrete environment actions. Each environment exposes `ActionSpec` objects with Pydantic payload models; `Actor` validates both `plan.action_type` and `plan.parameters` before emitting a `GameAction`. Post-processor hooks apply environment-specific transforms after validation.
 
 ### 3) Planning
 Reasons over observations and goals to choose what to do next. In the reactive loop, `Planner` calls the LLM with a Kripke summary and memory context. In the planning phase, `ResearchPlanner` drives an active epistemic and research loop via the full `ToolRegistry`.

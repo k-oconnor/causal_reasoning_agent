@@ -20,9 +20,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from itertools import cycle
-from typing import Iterator, TYPE_CHECKING
+from typing import Any, Iterator, Mapping, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from causal_agent.tools import LLMResponse, ToolRegistry
@@ -101,6 +102,28 @@ class BaseLLM(ABC):
             f"{self.__class__.__name__} does not implement complete_with_tools(). "
             "Use OpenAILLM, DeepSeekLLM, AnthropicLLM, or GeminiLLM."
         )
+
+    def complete_structured(
+        self,
+        prompt: str,
+        schema: Mapping[str, Any],
+        system: str = "",
+        **kwargs,
+    ) -> dict[str, Any]:
+        """
+        Return a JSON object matching schema when the backend supports it.
+
+        Base fallback uses prompt-level JSON instructions and local parsing.
+        Concrete providers override this with native schema/JSON modes.
+        """
+        structured_prompt = (
+            f"{prompt}\n\n"
+            "Return a single JSON object matching this JSON Schema. "
+            "Do not include markdown fences or extra text.\n"
+            f"{json.dumps(schema, indent=2, sort_keys=True)}"
+        )
+        raw = self.complete(structured_prompt, system=system, **kwargs)
+        return _extract_json_object(raw)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -229,6 +252,39 @@ class OpenAILLM(BaseLLM):
         self._log_response(result)
         return LLMResponse(content=result)
 
+    def complete_structured(
+        self,
+        prompt: str,
+        schema: Mapping[str, Any],
+        system: str = "",
+        **kwargs,
+    ) -> dict[str, Any]:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        params = {**self._defaults, **kwargs}
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "game_plan",
+                        "schema": dict(schema),
+                        "strict": False,
+                    },
+                },
+                **params,
+            )
+        except Exception as exc:
+            if _supports_prompt_fallback(exc):
+                return super().complete_structured(prompt, schema, system=system, **kwargs)
+            raise
+        return _extract_json_object(resp.choices[0].message.content or "")
+
     def __repr__(self) -> str:
         return f"OpenAILLM(model={self._model!r})"
 
@@ -313,6 +369,37 @@ class AnthropicLLM(BaseLLM):
             return LLMResponse(tool_calls=tool_calls)
         self._log_response(text_content or "")
         return LLMResponse(content=text_content or "")
+
+    def complete_structured(
+        self,
+        prompt: str,
+        schema: Mapping[str, Any],
+        system: str = "",
+        **kwargs,
+    ) -> dict[str, Any]:
+        params: dict = {
+            "model": self._model,
+            "max_tokens": kwargs.pop("max_tokens", self._max_tokens),
+            "messages": [{"role": "user", "content": prompt}],
+            "output_config": {
+                "format": {
+                    "type": "json_schema",
+                    "schema": dict(schema),
+                }
+            },
+            **self._defaults,
+            **kwargs,
+        }
+        if system:
+            params["system"] = system
+
+        try:
+            resp = self._client.messages.create(**params)
+        except Exception as exc:
+            if _supports_prompt_fallback(exc):
+                return super().complete_structured(prompt, schema, system=system, **kwargs)
+            raise
+        return _extract_json_object(resp.content[0].text if resp.content else "")
 
     def __repr__(self) -> str:
         return f"AnthropicLLM(model={self._model!r})"
@@ -425,6 +512,35 @@ class GeminiLLM(BaseLLM):
         self._log_response(result)
         return LLMResponse(content=result)
 
+    def complete_structured(
+        self,
+        prompt: str,
+        schema: Mapping[str, Any],
+        system: str = "",
+        **kwargs,
+    ) -> dict[str, Any]:
+        if system:
+            model = self._genai.GenerativeModel(
+                model_name=self._model_name,
+                system_instruction=system,
+            )
+        else:
+            model = self._model
+
+        params = {**self._defaults, **kwargs}
+        try:
+            config = self._genai.types.GenerationConfig(
+                response_mime_type="application/json",
+                response_schema=dict(schema),
+                **params,
+            )
+            resp = model.generate_content(prompt, generation_config=config)
+        except Exception as exc:
+            if _supports_prompt_fallback(exc):
+                return super().complete_structured(prompt, schema, system=system, **kwargs)
+            raise
+        return _extract_json_object(resp.text if resp.text else "")
+
     def __repr__(self) -> str:
         return f"GeminiLLM(model={self._model_name!r})"
 
@@ -516,5 +632,77 @@ class DeepSeekLLM(BaseLLM):
         self._log_response(result)
         return LLMResponse(content=result)
 
+    def complete_structured(
+        self,
+        prompt: str,
+        schema: Mapping[str, Any],
+        system: str = "",
+        **kwargs,
+    ) -> dict[str, Any]:
+        schema_prompt = (
+            f"{prompt}\n\n"
+            "Return JSON matching this schema exactly:\n"
+            f"{json.dumps(schema, indent=2, sort_keys=True)}"
+        )
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": schema_prompt})
+
+        params = {
+            "temperature": 0.7,
+            "max_tokens": 1000,
+            **self._defaults,
+            **kwargs,
+        }
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                response_format={"type": "json_object"},
+                **params,
+            )
+        except Exception as exc:
+            if _supports_prompt_fallback(exc):
+                return super().complete_structured(prompt, schema, system=system, **kwargs)
+            raise
+        return _extract_json_object(resp.choices[0].message.content or "")
+
     def __repr__(self) -> str:
         return f"DeepSeekLLM(model={self._model!r})"
+
+
+# ---------------------------------------------------------------------------
+# Structured-output helpers
+# ---------------------------------------------------------------------------
+
+def _extract_json_object(raw: str) -> dict[str, Any]:
+    cleaned = raw.strip()
+    cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+    cleaned = re.sub(r"\n?```$", "", cleaned)
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if not match:
+            raise ValueError(f"LLM did not return a JSON object: {raw!r}")
+        data = json.loads(match.group())
+
+    if not isinstance(data, dict):
+        raise ValueError(f"LLM structured output must be a JSON object: {data!r}")
+    return data
+
+
+def _supports_prompt_fallback(exc: Exception) -> bool:
+    message = str(exc).lower()
+    markers = [
+        "response_format",
+        "json_schema",
+        "output_config",
+        "response_schema",
+        "unexpected keyword",
+        "unsupported",
+        "not supported",
+    ]
+    return any(marker in message for marker in markers)
