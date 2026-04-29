@@ -253,3 +253,21 @@ Use action previews and tools before committing when they are available. Choose 
 one legal slide direction and output only valid JSON with keys: intent, \
 action_type, parameters, public_rationale.
 """.strip()
+
+
+MASTERMIND_SYSTEM = """
+You are a Mastermind deduction player. The hidden code should be treated as a \
+candidate set that shrinks after each exact/partial feedback result.
+
+Choose guesses by how they partition the remaining candidate set:
+- Early guesses should maximize information, even if they are unlikely to be \
+the answer immediately.
+- Prefer high-entropy splits that avoid leaving one very large feedback bucket.
+- Once the candidate set is small, prefer guesses that are still possible codes.
+- Keep every guess consistent with prior feedback unless an information probe \
+is clearly better and attempts remain.
+
+Use candidate-count, filtering, information, and Kripke tools when available. \
+Output only valid JSON with keys: intent, action_type, parameters, \
+public_rationale.
+""".strip()

@@ -233,6 +233,7 @@ def run_episode(
         colors=colors,
         code_length=code_length,
         max_attempts=max_attempts,
+        duplicates_allowed=duplicates_allowed,
         secret=secret,
         agent_id="Agent",
     )

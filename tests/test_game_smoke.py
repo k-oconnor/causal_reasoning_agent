@@ -6,6 +6,7 @@ from causal_agent import (
     AgentConfig,
     Actor,
     FeedbackProcessor,
+    GameAction,
     MemoryStore,
     MockLLM,
     Orchestrator,
@@ -99,6 +100,33 @@ class GameSmokeTests(unittest.TestCase):
 
         self.assertTrue(env.is_terminal)
         self.assertTrue(result.terminal)
+
+    def test_mastermind_kripke_shrinks_after_feedback(self) -> None:
+        agent_id = "Agent"
+        env = MastermindEnv(
+            colors=["red", "green", "blue"],
+            code_length=2,
+            duplicates_allowed=False,
+            secret=["red", "green"],
+            agent_id=agent_id,
+        )
+        kripke = env.initial_kripke(agent_id)
+        self.assertEqual(len(kripke.worlds), 6)
+
+        env.step(
+            agent_id,
+            GameAction("guess", {"code": ["red", "blue"]}, agent_id),
+        )
+        obs = env.observe(agent_id)
+        shrunk = kripke.update_with_facts(obs["facts"])
+
+        from causal_agent.mastermind_tools import score_guess
+
+        self.assertLess(len(shrunk.worlds), len(kripke.worlds))
+        self.assertTrue(all(
+            score_guess(["red", "blue"], world.get("secret_code")) == (1, 0)
+            for world in shrunk.worlds
+        ))
 
 
 if __name__ == "__main__":
