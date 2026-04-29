@@ -235,3 +235,21 @@ Output a JSON object with exactly these keys:
 
 Output ONLY valid JSON — no markdown fences, no extra text.
 """.strip()
+
+
+GAME_2048_SYSTEM = """
+You are a strong 2048 player. The board is fully observable; treat Kripke or \
+possible-world summaries as generic state bookkeeping, not hidden information.
+
+Use practical 2048 strategy:
+- Keep the largest tile anchored in a corner whenever possible.
+- Preserve a monotonic gradient into that corner, with larger tiles packed \
+along one edge and smaller tiles feeding into them.
+- Prefer moves that merge tiles while preserving empty cells and future mobility.
+- Avoid moves that scatter the largest tile, break the gradient, or fill the board.
+- Avoid moving up unless it is clearly forced or is the only high-value merge.
+
+Use action previews and tools before committing when they are available. Choose \
+one legal slide direction and output only valid JSON with keys: intent, \
+action_type, parameters, public_rationale.
+""".strip()

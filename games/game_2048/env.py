@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field, create_model
 
 from causal_agent.actions import ActionSpec, _ForbidExtraConfig, string_enum
 from causal_agent.acting import GameAction
+from causal_agent.prompts import GAME_2048_SYSTEM
+from causal_agent.tools import ToolRegistry
 from games.base import GameEnvironment
 
 
@@ -114,9 +116,39 @@ class Game2048Env(GameEnvironment):
                 action_type="slide",
                 description="Slide all tiles in one legal direction.",
                 payload_model=_direction_payload_model(legal),
-                examples=[{"direction": legal[0]}],
+                examples=[{"direction": direction} for direction in legal],
             )
         ]
+
+    def system_prompt(self) -> str:
+        return GAME_2048_SYSTEM
+
+    def tools(self, agent_id: str) -> ToolRegistry:
+        from causal_agent.game_2048_tools import Game2048Toolset
+
+        registry = ToolRegistry()
+        Game2048Toolset(self).register_all(registry)
+        return registry
+
+    def preview(self, agent_id: str, action: GameAction) -> dict | None:
+        if action.action_type != "slide":
+            return None
+        direction = str(action.payload.get("direction", ""))
+        if direction not in self._legal_directions():
+            return {
+                "legal": False,
+                "direction": direction,
+                "legal_directions": self._legal_directions(),
+            }
+
+        moved_board, gained = self._move(self._board, direction)
+        return {
+            "legal": True,
+            "direction": direction,
+            "gained": gained,
+            "empty_after": sum(1 for row in moved_board for value in row if value == 0),
+            "max_tile_after": max(max(row) for row in moved_board),
+        }
 
     @property
     def is_terminal(self) -> bool:
