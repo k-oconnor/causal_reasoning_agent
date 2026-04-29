@@ -103,15 +103,6 @@ class ResearchPlanner:
     verbose        : Print each tool call and result to stdout.
     """
 
-    DEFAULT_SYSTEM = (
-        "You are an autonomous planning agent. "
-        "You have access to tools for researching information and inspecting "
-        "your epistemic state. Use them as needed to produce a thorough, "
-        "grounded plan that satisfies the goal. "
-        "When you have gathered sufficient information, output your final plan "
-        "as a complete, self-contained response — do not ask for clarification."
-    )
-
     def __init__(
         self,
         llm: BaseLLM,
@@ -124,7 +115,8 @@ class ResearchPlanner:
     ) -> None:
         self._llm = llm
         self._registry = registry
-        self._system = system_prompt or self.DEFAULT_SYSTEM
+        from causal_agent.prompts import PLANNING_SYSTEM
+        self._system = system_prompt or PLANNING_SYSTEM
         self._skills = skill_docs or []
         self._memory = memory
         self._max_iter = max_iterations
@@ -159,7 +151,7 @@ class ResearchPlanner:
                 )
 
         for iterations in range(1, self._max_iter + 1):
-            log.info("── planning iteration %d / %d ──", iterations, self._max_iter)
+            log.info("-- planning iteration %d / %d --", iterations, self._max_iter)
 
             response = self._llm.complete_with_tools(
                 messages=messages,
@@ -271,13 +263,13 @@ class ResearchPlanner:
         }
 
     def _log_call(self, tc: ToolCall) -> None:
-        log.info("tool call  →  %s(%s)", tc.name, tc.arguments)
+        log.info("tool call >> %s(%s)", tc.name, tc.arguments)
 
     def _log_result(self, result: ToolResult) -> None:
         preview = result.content[:300].replace("\n", " ")
-        suffix = "…" if len(result.content) > 300 else ""
-        log.info("tool result ←  %s: %s%s", result.name, preview, suffix)
-        log.debug("tool result full ←  %s", result.content)
+        suffix = "..." if len(result.content) > 300 else ""
+        log.info("tool result << %s: %s%s", result.name, preview, suffix)
+        log.debug("tool result full << %s", result.content)
 
     def _mem_write(
         self,

@@ -129,11 +129,11 @@ class SilentBackend(_Backend):
         log.info("[silent] human_notify: %s", message)
 
     def ask(self, question: str) -> str:
-        log.info("[silent] human_ask: %s  →  %r", question, self._response)
+        log.info("[silent] human_ask: %s >> %r", question, self._response)
         return self._response
 
     def confirm(self, message: str) -> bool:
-        log.info("[silent] human_confirm: %s  →  %s", message, self._confirm)
+        log.info("[silent] human_confirm: %s >> %s", message, self._confirm)
         return self._confirm
 
 

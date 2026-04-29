@@ -39,6 +39,7 @@ causal_reasoning_agent/
 │   ├── kripke.py               # World, KripkeModel — symbolic state + interventions
 │   ├── kripke_tools.py         # KripkeToolset — KripkeModel ops as LLM-callable tools
 │   ├── llm.py                  # BaseLLM + adapters: Mock, OpenAI, Anthropic, Gemini, DeepSeek
+│   ├── prompts.py              # PLANNING_SYSTEM, REACTIVE_SYSTEM — boilerplate init prompts
 │   ├── tools.py                # ToolDefinition, ToolCall, LLMResponse, ToolRegistry
 │   ├── research_tools.py       # ResearchTools — Tavily (web_search) + Jina (fetch_page)
 │   ├── research_planner.py     # ResearchPlanner — ReAct planning loop, PlanningResult
@@ -248,6 +249,35 @@ setup_logging("INFO", log_file="run.log")    # mirror output to a file (append m
 | `INFO` | Completion summaries (`DeepSeekLLM ← [complete] 3,412 chars`), tool call names, planning iteration counter, final plan char count |
 | `WARNING` | Recoverable issues — replan triggered, max iterations hit |
 | `ERROR` | Unrecoverable failures |
+
+---
+
+## System prompts
+
+`causal_agent/prompts.py` provides two ready-made system prompts. Import whichever you need — or concatenate your own eval-specific addendum.
+
+| Constant | Used by | What it covers |
+|---|---|---|
+| `PLANNING_SYSTEM` | `ResearchPlanner` (default) | Framework overview, all three tool categories with usage guidance, a five-step goal-navigation strategy, stopping criteria, and output format expectations |
+| `REACTIVE_SYSTEM` | `Planner` (default) | Turn-by-turn reactive planning over a Kripke summary; instructs the model to output strict JSON (`intent`, `action_type`, `parameters`, `reasoning`) |
+
+Both are **task-agnostic** by design. Eval-specific context goes in an addendum, not in the base prompt:
+
+```python
+from causal_agent.prompts import PLANNING_SYSTEM
+
+ksp_system = PLANNING_SYSTEM + """
+
+## Eval-specific constraints
+- You are controlling a rocket in Kerbal Space Program via kRPC.
+- Your final output must include a rocket manifest and a flight script.
+- All delta-V figures should be verified against the Mun transfer window.
+"""
+
+planner = ResearchPlanner(llm=llm, registry=registry, system_prompt=ksp_system)
+```
+
+The prompts are plain strings — feel free to inspect or print them before a run to verify what the model sees.
 
 ---
 

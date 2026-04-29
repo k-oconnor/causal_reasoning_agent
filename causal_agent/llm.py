@@ -56,29 +56,29 @@ class BaseLLM(ABC):
         if log.isEnabledFor(logging.DEBUG):
             text = str(prompt_or_messages)
             log.debug(
-                "%r  →  system=%r  input=%.400s%s",
+                "%r >> system=%r input=%.400s%s",
                 self,
                 system[:120] if system else "",
                 text,
-                "…" if len(text) > 400 else "",
+                "..." if len(text) > 400 else "",
             )
 
     def _log_response(self, content: str, kind: str = "complete") -> None:
-        log.info("%r  ←  [%s]  %d chars", self, kind, len(content))
+        log.info("%r << [%s] %d chars", self, kind, len(content))
         if log.isEnabledFor(logging.DEBUG):
             log.debug(
-                "%r  ←  %.500s%s",
+                "%r << %.500s%s",
                 self,
                 content,
-                "…" if len(content) > 500 else "",
+                "..." if len(content) > 500 else "",
             )
 
     def _log_tool_calls(self, tool_calls: list) -> None:
         names = [tc.name for tc in tool_calls]
-        log.info("%r  ←  [tool_calls]  %s", self, names)
+        log.info("%r << [tool_calls] %s", self, names)
         if log.isEnabledFor(logging.DEBUG):
             for tc in tool_calls:
-                log.debug("%r      call  %s(%s)", self, tc.name, tc.arguments)
+                log.debug("%r     call %s(%s)", self, tc.name, tc.arguments)
 
     def complete_with_tools(
         self,

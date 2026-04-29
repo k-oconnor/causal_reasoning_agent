@@ -32,7 +32,7 @@ from pathlib import Path
 
 _FRAMEWORK_LOGGER = "causal_agent"
 
-_FMT = "%(asctime)s  %(levelname)-8s  %(name)s  —  %(message)s"
+_FMT = "%(asctime)s  %(levelname)-8s  %(name)s  |  %(message)s"
 _DATEFMT = "%H:%M:%S"
 
 
@@ -41,31 +41,51 @@ def setup_logging(
     log_file: str | Path | None = None,
     fmt: str = _FMT,
     datefmt: str = _DATEFMT,
+    load_dotenv: bool = True,
 ) -> logging.Logger:
     """
     Configure the causal_agent logger and return it.
 
     Parameters
     ----------
-    level    : "DEBUG", "INFO", "WARNING", "ERROR", or an int.
-    log_file : optional path; if provided, output is mirrored to this file
-               (append mode) in addition to stdout.
-    fmt      : log format string (default includes timestamp + level + name).
-    datefmt  : strftime format for timestamps.
+    level      : "DEBUG", "INFO", "WARNING", "ERROR", or an int.
+    log_file   : optional path; if provided, output is mirrored to this file
+                 (append mode) in addition to stdout.
+    fmt        : log format string (default includes timestamp + level + name).
+    datefmt    : strftime format for timestamps.
+    load_dotenv: if True (default), load .env from the current directory so
+                 API keys are available without manual dotenv calls.
 
     Returns
     -------
     The configured causal_agent root logger.
     """
+    if load_dotenv:
+        try:
+            from dotenv import load_dotenv as _load
+            _load()
+        except ImportError:
+            pass
     numeric = level if isinstance(level, int) else getattr(logging, level.upper(), logging.INFO)
 
     formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
 
+    # Force UTF-8 on stdout so non-ASCII content from web pages / LLM responses
+    # doesn't crash the log handler on Windows (cp1252 default).
+    stdout = sys.stdout
+    if hasattr(stdout, "reconfigure"):
+        try:
+            stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     handlers: list[logging.Handler] = [
-        _make_handler(logging.StreamHandler(sys.stdout), formatter),
+        _make_handler(logging.StreamHandler(stdout), formatter),
     ]
     if log_file is not None:
-        handlers.append(_make_handler(logging.FileHandler(log_file, mode="a"), formatter))
+        handlers.append(_make_handler(
+            logging.FileHandler(log_file, mode="a", encoding="utf-8"), formatter
+        ))
 
     logger = logging.getLogger(_FRAMEWORK_LOGGER)
     logger.setLevel(numeric)

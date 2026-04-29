@@ -87,18 +87,6 @@ class Planner:
                            valid action and include the results in the prompt.
     """
 
-    SYSTEM_PROMPT = (
-        "You are a strategic AI agent playing a social deduction game. "
-        "You reason carefully about what other players know, believe, and intend. "
-        "You receive an epistemic state summary (possible worlds, certain facts) "
-        "and must output a JSON plan with keys: "
-        "intent, action_type, parameters, reasoning.\n"
-        "action_type must be one of the listed valid actions.\n"
-        "parameters is a dict of action-specific values (e.g. {\"message\": \"...\"} "
-        "for speak, {\"target\": \"Alice\"} for vote).\n"
-        "Output ONLY valid JSON — no markdown fences, no extra text."
-    )
-
     def __init__(self, llm: BaseLLM, simulate_before_plan: bool = True) -> None:
         self._llm = llm
         self._simulate = simulate_before_plan
@@ -143,7 +131,8 @@ class Planner:
             intervention_notes=intervention_notes,
         )
 
-        raw = self._llm.complete(prompt, system=self.SYSTEM_PROMPT)
+        from causal_agent.prompts import REACTIVE_SYSTEM
+        raw = self._llm.complete(prompt, system=REACTIVE_SYSTEM)
         plan = self._parse_response(raw, valid_actions)
         plan.intervention_notes = intervention_notes
 

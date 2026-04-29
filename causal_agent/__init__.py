@@ -8,6 +8,7 @@ from causal_agent.tools import ToolDefinition, ToolCall, ToolResult, LLMResponse
 from causal_agent.research_tools import ResearchTools
 from causal_agent.research_planner import ResearchPlanner, PlanningResult
 from causal_agent.human_interface import HumanInterface
+from causal_agent.prompts import PLANNING_SYSTEM, REACTIVE_SYSTEM
 from causal_agent.memory import MemoryStore, MemoryEntry
 from causal_agent.feedback import FeedbackProcessor, FeedbackEvent, FeedbackKind
 from causal_agent.planning import Planner, Plan
