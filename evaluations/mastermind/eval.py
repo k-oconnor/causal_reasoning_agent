@@ -7,49 +7,40 @@ solve rate plus number of guesses. The local runner also includes deterministic
 candidate-filter and minimax baselines for comparison with LLM agents.
 
 Usage:
-    python -m examples.eval_mastermind --policy candidate --episodes 20
-    python -m examples.eval_mastermind --policy knuth --episodes 20 --log-dir logs/mastermind_knuth
-    python -m examples.eval_mastermind --policy llm --model mock --episodes 5
-    python -m examples.eval_mastermind --policy interactive --episodes 1
+    python -m evaluations.mastermind.eval --policy candidate --episodes 20
+    python -m evaluations.mastermind.eval --policy knuth --episodes 20
+    python -m evaluations.mastermind.eval --policy llm --model mock --episodes 5
+    python -m evaluations.mastermind.eval --policy interactive --episodes 1
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import statistics
-import sys
 from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from itertools import permutations, product
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    pass
-
-from causal_agent import (  # noqa: E402
+from causal_agent import (
     Actor,
-    AnthropicLLM,
-    DeepSeekLLM,
     FeedbackProcessor,
-    GeminiLLM,
     MemoryEntry,
     MemoryStore,
-    MockLLM,
-    OpenAILLM,
     Planner,
 )
-from causal_agent.acting import GameAction  # noqa: E402
-from games.mastermind import MastermindEnv  # noqa: E402
+from causal_agent.acting import GameAction
+from evaluations.common import (
+    TraceLogger,
+    add_llm_args,
+    build_llm,
+    dataclass_to_dict,
+    write_summary,
+)
+from games.mastermind import MastermindEnv
 
 
 FLAIR_COLORS = (
@@ -212,23 +203,6 @@ _MOCK_MASTERMIND_RESPONSES = [
 ]
 
 
-def build_llm(args: argparse.Namespace):
-    if args.model == "openai":
-        return OpenAILLM(model=args.openai_model, api_key=args.openai_key, temperature=args.temperature)
-    if args.model == "anthropic":
-        return AnthropicLLM(
-            model=args.anthropic_model,
-            api_key=args.anthropic_key,
-            max_tokens=args.max_tokens,
-            temperature=args.temperature,
-        )
-    if args.model == "gemini":
-        return GeminiLLM(model=args.gemini_model, api_key=args.gemini_key, temperature=args.temperature)
-    if args.model == "deepseek":
-        return DeepSeekLLM(model=args.deepseek_model, api_key=args.deepseek_key, temperature=args.temperature)
-    return MockLLM(_MOCK_MASTERMIND_RESPONSES)
-
-
 def build_secret(
     rng: random.Random,
     colors: Sequence[str],
@@ -269,13 +243,9 @@ def run_episode(
     memory = MemoryStore(max_short_term=80)
     kripke = env.initial_kripke("Agent")
     invalid_moves = 0
-    trace_file = None
 
-    if log_dir is not None:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        trace_file = (log_dir / f"episode_{episode:04d}_{policy_name}_seed_{seed}.jsonl").open("w")
-
-    try:
+    trace_filename = f"episode_{episode:04d}_{policy_name}_seed_{seed}.jsonl"
+    with TraceLogger(log_dir, trace_filename) as trace:
         final_exact = 0
         final_partial = 0
         for turn in range(max_attempts):
@@ -371,8 +341,7 @@ def run_episode(
                 "solved": env.is_terminal and bool(feedback.get("reward", 0.0) > 0),
                 "terminal": env.is_terminal,
             }
-            if trace_file is not None:
-                trace_file.write(json.dumps(record) + "\n")
+            trace.write(record)
 
             if verbose:
                 print(
@@ -396,15 +365,13 @@ def run_episode(
             secret=secret,
             remaining_candidates=len(consistent_candidates(final_state)),
         )
-    finally:
-        if trace_file is not None:
-            trace_file.close()
 
 
 def summarize(results: list[EpisodeResult]) -> dict[str, Any]:
     guesses = [result.guesses for result in results]
     solved_results = [result for result in results if result.solved]
     return {
+        "game": "mastermind",
         "episodes": len(results),
         "policy": results[0].policy if results else "",
         "games_solved": len(solved_results),
@@ -428,8 +395,8 @@ def run(args: argparse.Namespace) -> None:
     if args.code_length > len(colors) and not args.duplicates_allowed:
         raise ValueError("code_length cannot exceed num_colors when duplicates are disabled.")
 
-    log_dir = Path(args.log_dir) if args.log_dir else None
-    llm = build_llm(args) if args.policy == "llm" else None
+    log_dir = Path(args.log_dir or f"logs/evaluations/mastermind/{args.policy}")
+    llm = build_llm(args, _MOCK_MASTERMIND_RESPONSES) if args.policy == "llm" else None
     results = [
         run_episode(
             episode=episode,
@@ -448,7 +415,7 @@ def run(args: argparse.Namespace) -> None:
 
     print("\nEpisode results:")
     for result in results:
-        print(json.dumps(asdict(result), sort_keys=True))
+        print(json.dumps(dataclass_to_dict(result), sort_keys=True))
 
     summary = summarize(results)
     summary.update({
@@ -460,9 +427,7 @@ def run(args: argparse.Namespace) -> None:
     print("\nSummary:")
     print(json.dumps(summary, indent=2, sort_keys=True))
 
-    if log_dir is not None:
-        summary_path = log_dir / f"summary_{args.policy}.json"
-        summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    if write_summary(log_dir, args.policy, summary) is not None:
         print(f"\nWrote logs to {log_dir}")
 
 
@@ -475,19 +440,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-colors", type=int, default=6)
     parser.add_argument("--max-attempts", type=int, default=10)
     parser.add_argument("--duplicates-allowed", action="store_true")
-    parser.add_argument("--log-dir", default="logs/mastermind")
+    parser.add_argument("--log-dir", default=None)
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--model", choices=["mock", "openai", "anthropic", "gemini", "deepseek"], default="mock")
-    parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--max-tokens", type=int, default=1024)
-    parser.add_argument("--openai-key", default=None)
-    parser.add_argument("--openai-model", default="gpt-4o")
-    parser.add_argument("--anthropic-key", default=None)
-    parser.add_argument("--anthropic-model", default="claude-3-5-sonnet-20241022")
-    parser.add_argument("--gemini-key", default=None)
-    parser.add_argument("--gemini-model", default="gemini-2.0-flash")
-    parser.add_argument("--deepseek-key", default=None)
-    parser.add_argument("--deepseek-model", default="deepseek-chat")
+    add_llm_args(parser)
     return parser.parse_args()
 
 

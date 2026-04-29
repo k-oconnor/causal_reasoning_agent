@@ -29,6 +29,10 @@ python -m examples.run_werewolf --model gemini           # Gemini
 python -m examples.run_werewolf --model deepseek         # DeepSeek (cheap, good for testing)
 python -m examples.run_2048                              # 2048 with MockLLM
 python -m examples.run_mastermind                         # Mastermind with MockLLM
+
+# Run benchmark-style evaluations
+python -m evaluations.game_2048.eval --policy greedy --episodes 20
+python -m evaluations.mastermind.eval --policy knuth --episodes 20
 ```
 
 ---
@@ -58,6 +62,10 @@ causal_reasoning_agent/
 │   ├── werewolf/env.py         # Werewolf implementation
 │   ├── game_2048/env.py        # 2048 implementation
 │   └── mastermind/env.py       # Mastermind implementation
+├── evaluations/
+│   ├── common/                 # shared eval logging, result, and LLM helpers
+│   ├── game_2048/eval.py       # 2048 benchmark runner
+│   └── mastermind/eval.py      # Mastermind benchmark runner
 ├── ksp_eval/                   # eval spec: mission instructions passed to the agent on init
 │   └── ksp_mun_orbit_agent_instructions.md
 ├── skills/                     # reference docs injected into the agent's context
@@ -73,6 +81,27 @@ causal_reasoning_agent/
 ├── .env.example                # key template (copy → .env, never commit .env)
 └── requirements.txt
 ```
+
+---
+
+## Examples vs Evaluations
+
+`examples/` contains short demos for trying an environment with `MockLLM` or a real provider. `evaluations/` contains benchmark-style runners that execute many episodes, log one JSONL trace per episode, and write a summary JSON for comparison across policies.
+
+```bash
+# 2048 baselines and LLM policy
+python -m evaluations.game_2048.eval --policy random --episodes 20
+python -m evaluations.game_2048.eval --policy greedy --episodes 20
+python -m evaluations.game_2048.eval --policy llm --model mock --episodes 5 --max-turns 50
+
+# Mastermind baselines and LLM policy
+python -m evaluations.mastermind.eval --policy random --episodes 20
+python -m evaluations.mastermind.eval --policy candidate --episodes 20
+python -m evaluations.mastermind.eval --policy knuth --episodes 20
+python -m evaluations.mastermind.eval --policy llm --model mock --episodes 5
+```
+
+By default, evaluation logs are written under `logs/evaluations/<game>/<policy>/`. Generated logs stay ignored by git via `logs/`.
 
 ---
 
