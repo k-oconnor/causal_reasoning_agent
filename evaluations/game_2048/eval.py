@@ -27,6 +27,7 @@ from causal_agent import (
     MemoryEntry,
     MemoryStore,
     Planner,
+    SkillSpec,
 )
 from causal_agent.acting import GameAction
 from evaluations.common import (
@@ -34,6 +35,7 @@ from evaluations.common import (
     add_llm_args,
     build_llm,
     dataclass_to_dict,
+    load_or_bootstrap_skill_docs,
     write_summary,
 )
 from games.game_2048 import Game2048Env
@@ -128,6 +130,33 @@ _MOCK_2048_RESPONSES = [
     '"parameters": {"direction": "down"}, "public_rationale": "Open space for future tiles."}',
 ]
 
+SKILL_MANIFEST_2048 = [
+    SkillSpec(
+        filename="strategy.md",
+        topic="High-level 2048 strategy for score maximization.",
+        success_criteria=(
+            "Explains stable corner building, monotonic rows/columns, merge timing, "
+            "and why random lateral moves are dangerous."
+        ),
+    ),
+    SkillSpec(
+        filename="board_heuristics.md",
+        topic="Board evaluation heuristics for selecting a slide direction.",
+        success_criteria=(
+            "Defines practical turn-level heuristics: empty cells, immediate merges, "
+            "max tile placement, smoothness, and preserving legal future moves."
+        ),
+    ),
+    SkillSpec(
+        filename="move_selection_traps.md",
+        topic="Common 2048 move-selection traps and recovery patterns.",
+        success_criteria=(
+            "Identifies avoidable traps such as breaking the anchor corner, isolating "
+            "large tiles, overusing down/right, and chasing one merge at the cost of space."
+        ),
+    ),
+]
+
 
 def run_episode(
     episode: int,
@@ -137,11 +166,16 @@ def run_episode(
     log_dir: Path | None,
     verbose: bool,
     llm: Any | None = None,
+    skill_docs: list[str] | None = None,
 ) -> EpisodeResult:
     rng = random.Random(seed)
     env = Game2048Env(seed=seed, agent_id="Agent")
     policy = POLICIES.get(policy_name)
-    planner = Planner(llm, simulate_before_plan=False) if policy_name == "llm" else None
+    planner = (
+        Planner(llm, simulate_before_plan=False, skill_docs=skill_docs)
+        if policy_name == "llm"
+        else None
+    )
     actor = Actor()
     feedback_processor = FeedbackProcessor()
     memory = MemoryStore(max_short_term=80)
@@ -264,6 +298,13 @@ def summarize(results: list[EpisodeResult]) -> dict:
 def run(args: argparse.Namespace) -> None:
     log_dir = Path(args.log_dir or f"logs/evaluations/2048/{args.policy}")
     llm = build_llm(args, _MOCK_2048_RESPONSES) if args.policy == "llm" else None
+    skill_docs = load_or_bootstrap_skill_docs(
+        game_id="2048",
+        manifest=SKILL_MANIFEST_2048,
+        llm=llm,
+        model_name=args.model,
+        disabled=args.no_skill_bootstrap,
+    ) if args.policy == "llm" else []
     results = [
         run_episode(
             episode=episode,
@@ -273,6 +314,7 @@ def run(args: argparse.Namespace) -> None:
             log_dir=log_dir,
             verbose=args.verbose or args.policy == "interactive",
             llm=llm,
+            skill_docs=skill_docs,
         )
         for episode in range(args.episodes)
     ]
@@ -297,6 +339,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--log-dir", default=None)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--no-skill-bootstrap",
+        action="store_true",
+        help="Disable Tavily-backed generated skill bootstrap for real LLM policies.",
+    )
     add_llm_args(parser)
     return parser.parse_args()
 

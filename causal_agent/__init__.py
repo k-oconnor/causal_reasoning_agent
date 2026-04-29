@@ -7,6 +7,7 @@ from causal_agent.llm import BaseLLM, MockLLM, OpenAILLM, AnthropicLLM, GeminiLL
 from causal_agent.tools import ToolDefinition, ToolCall, ToolResult, LLMResponse, ToolRegistry
 from causal_agent.research_tools import ResearchTools
 from causal_agent.file_tools import FileTools
+from causal_agent.skill_bootstrap import SkillBootstrapper, SkillSpec
 from causal_agent.research_planner import ResearchPlanner, PlanningResult
 from causal_agent.human_interface import HumanInterface
 from causal_agent.prompts import PLANNING_SYSTEM, REACTIVE_SYSTEM
@@ -29,6 +30,7 @@ __all__ = [
     "ToolDefinition", "ToolCall", "ToolResult", "LLMResponse", "ToolRegistry",
     # research
     "ResearchTools", "ResearchPlanner", "PlanningResult",
+    "SkillBootstrapper", "SkillSpec",
     # file tools
     "FileTools",
     # human interface

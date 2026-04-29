@@ -31,6 +31,7 @@ from causal_agent import (
     MemoryEntry,
     MemoryStore,
     Planner,
+    SkillSpec,
 )
 from causal_agent.acting import GameAction
 from evaluations.common import (
@@ -38,6 +39,7 @@ from evaluations.common import (
     add_llm_args,
     build_llm,
     dataclass_to_dict,
+    load_or_bootstrap_skill_docs,
     write_summary,
 )
 from games.mastermind import MastermindEnv
@@ -202,6 +204,33 @@ _MOCK_MASTERMIND_RESPONSES = [
     '"public_rationale": "Combine colors that may be present."}',
 ]
 
+SKILL_MANIFEST_MASTERMIND = [
+    SkillSpec(
+        filename="candidate_filtering.md",
+        topic="Mastermind candidate-set filtering after each exact/partial score.",
+        success_criteria=(
+            "Explains how to eliminate impossible codes by replaying every prior "
+            "guess against each candidate and keeping only matching feedback."
+        ),
+    ),
+    SkillSpec(
+        filename="feedback_interpretation.md",
+        topic="Correct interpretation of exact and partial Mastermind feedback.",
+        success_criteria=(
+            "Clearly distinguishes exact matches from color-only partial matches, "
+            "including duplicate-color accounting and common overcounting mistakes."
+        ),
+    ),
+    SkillSpec(
+        filename="guess_selection.md",
+        topic="Choosing guesses that solve quickly under limited attempts.",
+        success_criteria=(
+            "Covers probe guesses, choosing consistent candidates, minimax-style "
+            "partitioning, and when to guess the only remaining candidate."
+        ),
+    ),
+]
+
 
 def build_secret(
     rng: random.Random,
@@ -225,6 +254,7 @@ def run_episode(
     log_dir: Path | None,
     verbose: bool,
     llm: Any | None = None,
+    skill_docs: list[str] | None = None,
 ) -> EpisodeResult:
     rng = random.Random(seed)
     secret = build_secret(rng, colors, code_length, duplicates_allowed)
@@ -237,7 +267,11 @@ def run_episode(
     )
     all_codes = generate_all_codes(colors, code_length, duplicates_allowed)
     policy = POLICIES.get(policy_name)
-    planner = Planner(llm, simulate_before_plan=False) if policy_name == "llm" else None
+    planner = (
+        Planner(llm, simulate_before_plan=False, skill_docs=skill_docs)
+        if policy_name == "llm"
+        else None
+    )
     actor = Actor()
     feedback_processor = FeedbackProcessor()
     memory = MemoryStore(max_short_term=80)
@@ -397,6 +431,13 @@ def run(args: argparse.Namespace) -> None:
 
     log_dir = Path(args.log_dir or f"logs/evaluations/mastermind/{args.policy}")
     llm = build_llm(args, _MOCK_MASTERMIND_RESPONSES) if args.policy == "llm" else None
+    skill_docs = load_or_bootstrap_skill_docs(
+        game_id="mastermind",
+        manifest=SKILL_MANIFEST_MASTERMIND,
+        llm=llm,
+        model_name=args.model,
+        disabled=args.no_skill_bootstrap,
+    ) if args.policy == "llm" else []
     results = [
         run_episode(
             episode=episode,
@@ -409,6 +450,7 @@ def run(args: argparse.Namespace) -> None:
             log_dir=log_dir,
             verbose=args.verbose or args.policy == "interactive",
             llm=llm,
+            skill_docs=skill_docs,
         )
         for episode in range(args.episodes)
     ]
@@ -442,6 +484,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--duplicates-allowed", action="store_true")
     parser.add_argument("--log-dir", default=None)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--no-skill-bootstrap",
+        action="store_true",
+        help="Disable Tavily-backed generated skill bootstrap for real LLM policies.",
+    )
     add_llm_args(parser)
     return parser.parse_args()
 

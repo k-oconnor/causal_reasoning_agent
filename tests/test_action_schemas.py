@@ -126,6 +126,39 @@ class PlannerStructuredOutputTests(unittest.TestCase):
 
         self.assertEqual(plan.parameters, {"direction": "left"})
 
+    def test_planner_includes_skill_docs_in_prompt(self) -> None:
+        class CaptureLLM(MockLLM):
+            def __init__(self) -> None:
+                super().__init__([])
+                self.prompt = ""
+
+            def complete_structured(self, prompt, schema, system="", **kwargs):
+                self.prompt = prompt
+                return {
+                    "intent": "use skill",
+                    "action_type": "slide",
+                    "parameters": {"direction": "left"},
+                    "public_rationale": "follow corner strategy",
+                }
+
+        llm = CaptureLLM()
+        planner = Planner(
+            llm,
+            simulate_before_plan=False,
+            skill_docs=["### 2048/strategy\n\nKeep the largest tile in a stable corner."],
+        )
+
+        planner.plan(
+            kripke=self.kripke,
+            memory=self.memory,
+            goal="move",
+            agent_id="Agent",
+            action_specs=[self.spec],
+        )
+
+        self.assertIn("--- SKILL LIBRARY ---", llm.prompt)
+        self.assertIn("stable corner", llm.prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

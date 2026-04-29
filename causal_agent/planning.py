@@ -104,10 +104,12 @@ class Planner:
         llm: BaseLLM,
         simulate_before_plan: bool = True,
         max_parse_retries: int = 1,
+        skill_docs: Sequence[str] | None = None,
     ) -> None:
         self._llm = llm
         self._simulate = simulate_before_plan
         self._max_parse_retries = max_parse_retries
+        self._skill_docs = [doc for doc in (skill_docs or []) if doc.strip()]
 
     # ------------------------------------------------------------------
     # Public API
@@ -239,6 +241,10 @@ class Planner:
 
         sections.append("--- RECENT MEMORY ---")
         sections.append(memory.short_term_context(k=15))
+
+        if self._skill_docs:
+            sections.append("--- SKILL LIBRARY ---")
+            sections.extend(doc.strip() for doc in self._skill_docs)
 
         if intervention_notes:
             sections.append("--- INTERVENTION SIMULATIONS ---")
