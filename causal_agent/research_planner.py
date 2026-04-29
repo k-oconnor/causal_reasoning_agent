@@ -99,8 +99,12 @@ class ResearchPlanner:
                      and any constraints on the output format.
     skill_docs     : Optional list of skill document strings to prepend to the
                      first user message as reference material.
-    max_iterations : Hard cap on ReAct loop iterations (default 20).
-    verbose        : Print each tool call and result to stdout.
+    max_iterations  : Hard cap on ReAct loop iterations (default 20).
+    max_tokens      : Token budget for each LLM call. Increase this for
+                      final synthesis steps that produce long manifests or
+                      scripts. Defaults to 4096 — enough for a full rocket
+                      manifest + flight script in one pass.
+    verbose         : Print each tool call and result to stdout.
     """
 
     def __init__(
@@ -111,6 +115,7 @@ class ResearchPlanner:
         skill_docs: list[str] | None = None,
         memory: MemoryStore | None = None,
         max_iterations: int = 20,
+        max_tokens: int = 4096,
         verbose: bool = True,
     ) -> None:
         self._llm = llm
@@ -120,7 +125,10 @@ class ResearchPlanner:
         self._skills = skill_docs or []
         self._memory = memory
         self._max_iter = max_iterations
+        self._max_tokens = max_tokens
         self._verbose = verbose
+        self._plan_complete_summary: str | None = None
+        self._register_completion_tool()
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -157,6 +165,7 @@ class ResearchPlanner:
                 messages=messages,
                 registry=self._registry,
                 system=self._system,
+                max_tokens=self._max_tokens,
             )
 
             if response.is_final:
@@ -202,16 +211,48 @@ class ResearchPlanner:
 
                 messages.append(result.to_openai_message())
 
-        # Hit max_iterations — return whatever we have.
-        last_content = messages[-1].get("content", "") if messages else ""
+                # plan_complete terminates the loop immediately — no more LLM calls.
+                if tc.name == "plan_complete" and self._plan_complete_summary is not None:
+                    plan_text = self._plan_complete_summary
+                    log.info(
+                        "plan_complete called — stopping. %d iterations, %d tool calls, %d chars",
+                        iterations, len(tool_call_log), len(plan_text),
+                    )
+                    self._mem_write(
+                        turn=iterations,
+                        kind="plan",
+                        source="planner",
+                        content=plan_text,
+                        metadata={"iterations": iterations, "tool_calls": len(tool_call_log)},
+                    )
+                    return PlanningResult(
+                        plan=plan_text,
+                        iterations=iterations,
+                        tool_calls=tool_call_log,
+                    )
+
+        # Hit max_iterations — try to recover from a human_notify call first.
         log.warning(
             "ResearchPlanner hit max_iterations (%d) without a final response.",
             self._max_iter,
         )
-        truncated_plan = (
-            f"[WARNING: planning truncated at {self._max_iter} iterations]\n\n"
-            + (last_content or "(no content)")
-        )
+
+        # If the model delivered its plan via human_notify, use that as the output.
+        notify_content = self._last_human_notify(tool_call_log)
+        if notify_content:
+            log.info(
+                "Recovering plan from human_notify payload (%d chars).", len(notify_content)
+            )
+            truncated_plan = (
+                f"[NOTE: plan was delivered via human_notify before iteration cap]\n\n"
+                + notify_content
+            )
+        else:
+            last_content = messages[-1].get("content", "") if messages else ""
+            truncated_plan = (
+                f"[WARNING: planning truncated at {self._max_iter} iterations]\n\n"
+                + (last_content or "(no content)")
+            )
         self._mem_write(
             turn=iterations,
             kind="plan",
@@ -270,6 +311,54 @@ class ResearchPlanner:
         suffix = "..." if len(result.content) > 300 else ""
         log.info("tool result << %s: %s%s", result.name, preview, suffix)
         log.debug("tool result full << %s", result.content)
+
+    def _register_completion_tool(self) -> None:
+        """
+        Register plan_complete into the registry.
+
+        When the agent calls plan_complete(summary), the planning loop stops
+        immediately — no further LLM calls are made.  The summary is stored as
+        the plan output.  This is the correct way to terminate: it avoids the
+        agent burning tokens after it has already delivered its work.
+        """
+        from causal_agent.tools import ToolDefinition
+
+        defn = ToolDefinition(
+            name="plan_complete",
+            description=(
+                "Signal that you have finished planning and delivered all required "
+                "artifacts to the operator. Call this as the LAST tool call in your "
+                "session — it terminates the planning loop immediately so no further "
+                "tokens are consumed. Pass a brief summary of what was delivered and "
+                "what the operator should do next."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "summary": {
+                        "type": "string",
+                        "description": (
+                            "One-paragraph summary of what you produced and the next "
+                            "action required from the operator."
+                        ),
+                    }
+                },
+                "required": ["summary"],
+            },
+        )
+
+        def _complete(summary: str) -> str:
+            self._plan_complete_summary = summary
+            return "Planning phase complete. Loop terminated."
+
+        self._registry.register(defn, _complete)
+
+    def _last_human_notify(self, tool_call_log: list[dict]) -> str:
+        """Return the message argument of the last human_notify call, or ''."""
+        for entry in reversed(tool_call_log):
+            if entry.get("call", {}).get("name") == "human_notify":
+                return entry["call"].get("arguments", {}).get("message", "")
+        return ""
 
     def _mem_write(
         self,
