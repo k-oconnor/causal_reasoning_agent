@@ -42,6 +42,8 @@ causal_reasoning_agent/
 │   ├── tools.py                # ToolDefinition, ToolCall, LLMResponse, ToolRegistry
 │   ├── memory.py               # MemoryStore, KripkeSnapshot
 │   ├── feedback.py             # FeedbackEvent, FeedbackProcessor
+│   ├── research_tools.py       # ResearchTools — Tavily (web_search) + Jina (fetch_page)
+│   ├── research_planner.py     # ResearchPlanner — ReAct loop, PlanningResult
 │   ├── planning.py             # Plan, Planner — Kripke-grounded reactive planning
 │   ├── acting.py               # GameAction, Actor — validates + packages actions
 │   └── orchestration.py        # Orchestrator — reactive session loop
@@ -244,6 +246,10 @@ Closes the loop. `FeedbackProcessor.process()` converts raw environment dicts in
 
 ### 5) Memory
 What persists within a session and across episodes. `MemoryStore` maintains a bounded short-term deque and an unbounded long-term list. `KripkeSnapshot` records epistemic state at each turn so belief evolution is traceable. Override `retrieve()` to plug in a vector store.
+
+A single `MemoryStore` instance should be threaded through the **entire eval** — planning phase, execution phase, and across all attempts. `ResearchPlanner` logs every tool call and the final plan into it; `Orchestrator` logs observations, actions, and feedback. When attempt N fails, the post-mortem is written as a `"reflection"` entry; attempt N+1's planning phase reads `short_term_context()` and skips re-researching what it already knows.
+
+Between attempts, call `memory.summarise_episode(llm)` to compress the full log into a paragraph for seeding the next planning cycle. The `prompt_template` parameter accepts a `{log}` placeholder for eval-specific summarisation instructions.
 
 ---
 

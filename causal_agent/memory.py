@@ -153,23 +153,33 @@ class MemoryStore:
     # Summarisation (requires an LLM)
     # ------------------------------------------------------------------
 
-    def summarise_episode(self, llm: Any) -> str:
+    def summarise_episode(self, llm: Any, prompt_template: str = "") -> str:
         """
-        Ask an LLM to compress the full long-term log into a paragraph.
+        Ask an LLM to compress the full long-term log into a concise summary.
 
         Parameters
         ----------
-        llm : any BaseLLM instance.
+        llm             : any BaseLLM instance.
+        prompt_template : optional override for the summarisation instruction.
+                          Use {log} as the placeholder for the episode text.
+                          Defaults to a generic compress-and-distil instruction.
         """
         if not self._long_term:
             return "(empty episode)"
-        log = "\n".join(str(e) for e in self._long_term)
-        prompt = (
-            "You are summarising a social-game episode for an AI agent's long-term memory.\n"
-            "Distil the key events, alliances, betrayals, and belief changes into "
-            "3-5 sentences.\n\n"
-            f"Episode log:\n{log}"
-        )
+
+        episode_log = "\n".join(str(e) for e in self._long_term)
+
+        if prompt_template:
+            prompt = prompt_template.format(log=episode_log)
+        else:
+            prompt = (
+                "You are compressing an agent's episode log into long-term memory.\n"
+                "Distil the key decisions, tool calls, discoveries, outcomes, and "
+                "belief changes into 3-5 concise sentences. Focus on what would be "
+                "most useful to know at the start of the next attempt.\n\n"
+                f"Episode log:\n{episode_log}"
+            )
+
         return llm.complete(prompt)
 
     # ------------------------------------------------------------------
