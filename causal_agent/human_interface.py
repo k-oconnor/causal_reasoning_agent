@@ -154,25 +154,44 @@ class HumanInterface:
 
     def __init__(
         self,
-        backend: Literal["cli", "silent"] | _Backend = "cli",
+        backend: Literal["cli", "silent", "web"] | _Backend = "cli",
         silent_response: str = "ok",
         silent_confirm: bool = True,
+        web_port: int = 8765,
     ) -> None:
         if isinstance(backend, str):
             if backend == "cli":
                 self._backend: _Backend = CliBackend()
             elif backend == "silent":
                 self._backend = SilentBackend(silent_response, silent_confirm)
+            elif backend == "web":
+                from causal_agent.ui_server import AgentUIServer, WebBackend
+                server = AgentUIServer(port=web_port)
+                server.start()
+                self._backend = WebBackend(server)
+                self._server = server
+                import webbrowser, threading
+                threading.Timer(0.5, lambda: webbrowser.open(f"http://localhost:{web_port}")).start()
             else:
-                raise ValueError(f"Unknown backend {backend!r}. Use 'cli' or 'silent'.")
+                raise ValueError(f"Unknown backend {backend!r}. Use 'cli', 'silent', or 'web'.")
         else:
             self._backend = backend
+        # Expose server if WebBackend was passed directly
+        if not hasattr(self, "_server") and hasattr(self._backend, "_server"):
+            self._server = self._backend._server
 
     def register_all(self, registry: ToolRegistry) -> None:
-        """Register human_notify, human_ask, and human_confirm into `registry`."""
-        registry.register(self._defn_notify(), self._notify)
-        registry.register(self._defn_ask(),    self._ask)
+        """Register human interface tools into `registry`.
+
+        Always registers: human_notify, human_ask, human_confirm.
+        When the backend supports operator instructions (WebBackend):
+        also registers check_operator_instructions.
+        """
+        registry.register(self._defn_notify(),  self._notify)
+        registry.register(self._defn_ask(),     self._ask)
         registry.register(self._defn_confirm(), self._confirm)
+        if hasattr(self._backend, "get_pending_instructions"):
+            registry.register(self._defn_check_instructions(), self._check_instructions)
 
     # ------------------------------------------------------------------
     # Tool definitions
@@ -241,6 +260,23 @@ class HumanInterface:
             },
         )
 
+    def _defn_check_instructions(self) -> ToolDefinition:
+        return ToolDefinition(
+            name="check_operator_instructions",
+            description=(
+                "Check whether the human operator has sent any unsolicited instructions "
+                "or corrections since the last time you checked. Returns a list of "
+                "messages, or '(none)' if the queue is empty. Call this periodically "
+                "to pick up operator guidance, corrections, or change requests without "
+                "waiting to be asked a direct question."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        )
+
     # ------------------------------------------------------------------
     # Callables (wired to the backend)
     # ------------------------------------------------------------------
@@ -255,3 +291,9 @@ class HumanInterface:
     def _confirm(self, message: str) -> str:
         result = self._backend.confirm(message)
         return "confirmed" if result else "denied"
+
+    def _check_instructions(self) -> str:
+        msgs = self._backend.get_pending_instructions()
+        if not msgs:
+            return "(none)"
+        return "\n".join(f"[{i+1}] {m}" for i, m in enumerate(msgs))
