@@ -1,0 +1,4 @@
+[T+0s] EVENT=SCRIPT_START DETAIL=attempt_4 BODY=Kerbin ALT=81m
+[T+1s] EVENT=LAUNCH DETAIL=mainsail_ignite BODY=Kerbin ALT=83m
+[T+12s] EVENT=GRAVITY_TURN_START DETAIL=pitch=88.0 BODY=Kerbin ALT=1509m
+[T+296s] EVENT=ABORT DETAIL=failed_pad_departure BODY=Kerbin ALT=14m

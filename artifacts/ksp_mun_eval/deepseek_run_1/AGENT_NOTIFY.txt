@@ -1,0 +1,136 @@
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+Hello! I'm the autonomous Mun mission agent. I've just started and will be designing, building, and flying a rocket to achieve a stable Mun orbit (PE ≥ 10 km, AP ≤ 500 km). Let's begin!
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+Excellent! KSP 1.12.5 with both DLCs. I have all the reference material I need. Let me now design the rocket, compute the dV budget, and write the flight script for Attempt 1.
+
+I'll start by designing a rocket that can deliver ≥ 5,250 m/s total dV with a first-stage TWR ≥ 1.3 at launch, then build the hypotheses, manifest, and flight script.
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+Attempt 1 is ready! Here's what I've prepared:
+
+**Rocket manifest** (manifest_attempt_1.md):
+- 3-stage rocket: Reliant (S1) → Terrier (S2) → Spark (S3)
+- Total vacuum dV: ~5,886 m/s ✓ (≥ 5,250)
+- First stage TWR at launch: 1.36 ✓ (≥ 1.3)
+- Full part list with exact KSP part names
+
+**Flight script** (flight_attempt_1.py):
+- Self-instrumenting: writes telemetry_attempt_1.txt, burns_attempt_1.txt, events_attempt_1.txt
+- Phase 1: Launch + gravity turn to 85 km apoapsis
+- Phase 2: Circularization burn at apoapsis
+- Phase 3: TMI with node refinement sweep for best Mun encounter
+- Phase 4: MOI at Mun periapsis
+- Phase 5: One full orbit confirmation (no thrust)
+
+**Hypotheses** (hypotheses_1.md):
+- H1: Rocket has sufficient dV/TWR (primary)
+- H2: First stage TWR may be insufficient
+- H3: Reliant (no gimbal) + reaction wheel provides adequate control
+- H4: Gravity turn profile may be too aggressive
+- H5: Burn execution works correctly
+
+**To run:** Build the rocket per the manifest, launch from KSC, connect kRPC, and run flight_attempt_1.py. The script will auto-write telemetry files. When it finishes or crashes, type 'done' and a brief description of how it ended.
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+Attempt 2 is ready! Here's what changed:
+
+**Key fix from Attempt 1:** The first stage was massively undersized. The Reliant + 2x FL-T800 only pushed the rocket to 19 km, then the Terrier (a vacuum engine) tried to fire in thick atmosphere and wasted all its fuel.
+
+**New Stage 1:** RE-I5 "Skipper" engine + Rockomax Jumbo-64 fuel tank (36 t fuel!)
+- TWR at launch: 1.31 ✓
+- Vacuum dV: 4,056 m/s
+- Expected burn time: ~154 seconds to push above 30 km
+
+**Also fixed:** The endless staging loop bug (added stage ≤ 0 guard)
+
+**Total vacuum dV: 7,707 m/s** — enormous margin.
+
+**Files:**
+- hypotheses_2.md
+- manifest_attempt_2.md  
+- flight_attempt_2.py
+
+Build the rocket per the manifest, launch from KSC, connect kRPC, and run flight_attempt_2.py. When done, type 'done: <one line description>'.
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+Attempt 3 is ready! Key change from Attempt 2:
+
+**Problem identified in A2:** The ascent logic cut throttle when AP reached 85 km, even though the vessel was at only 42 km altitude with 25% fuel remaining. This wasted fuel and left the Terrier to try circularizing from an escape trajectory.
+
+**Fix:** Burn the first stage (Skipper) all the way to fuel depletion before coasting. This ensures all first-stage dV is used efficiently for ascent. The Terrier then circularizes from whatever AP the Skipper established.
+
+**Same rocket as A2** (Skipper + Jumbo-64, 7,707 m/s total dV) — the rocket was fine, the ascent logic was the problem.
+
+**Files:**
+- hypotheses_3.md
+- manifest_attempt_3.md
+- flight_attempt_3.py
+
+Build, launch, connect kRPC, run flight_attempt_3.py. Type 'done: <one line>' when finished.
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+Attempt 4 is ready! Key changes from A3:
+
+**Problem identified:** In A3, the Terrier started burning during the coast phase (throttle somehow got reset from 0.0 to 1.0), pushing the vessel to escape velocity before circularization could happen.
+
+**Fix 1:** Eliminate the coast phase entirely. After the first stage (Skipper) depletes, immediately circularize with the Terrier at the current position. No coast = no unintended burn during coast.
+
+**Fix 2:** Added `vessel.control.throttle = 0.0` on every iteration of every coast/wait loop as a throttle guard.
+
+**Same rocket** (Skipper + Jumbo-64, 7,707 m/s total dV).
+
+**Files:**
+- hypotheses_4.md
+- manifest_attempt_3.md (same rocket as A3)
+- flight_attempt_4.py
+
+Build, launch, connect kRPC, run flight_attempt_4.py. Type 'done: <one line>' when finished.
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+Attempt 5 is ready with a critical design change!
+
+**Problem from A4:** The Skipper + Jumbo-64 (36 t fuel) was too powerful — it pushed the vessel to 2,618 m/s at 62 km (above circular orbital speed), making circularization impossible with a prograde burn.
+
+**Fix:** Reduced first-stage fuel from Jumbo-64 (36 t) to X200-32 (18 t). This gives:
+- Stage 1 dV: 2,976 m/s (was 4,056 m/s) — enough to reach orbit without overshooting
+- TWR at launch: 2.22 (was 1.31) — much snappier ascent
+- Expected AP at burnout: ~80-150 km (not escape)
+- Total vacuum dV: 6,627 m/s — still plenty of margin
+
+**Files:**
+- hypotheses_5.md
+- manifest_attempt_5.md
+- flight_attempt_5.py
+
+Build the new rocket (Skipper + X200-32 tank, not Jumbo-64), launch, connect kRPC, run flight_attempt_5.py. Type 'done: <one line>' when finished.
+
+────────────────────────────────────────────────────────────
+[AGENT NOTIFY]
+All 5 attempts are complete. Here's the summary:
+
+**Attempt 1:** Reliant + 2x FL-T800 — Terrier fired in thick atmosphere at 19 km, wasted all fuel. Stage 1 too small.
+
+**Attempt 2:** Skipper + Jumbo-64 — Ascent logic cut throttle at AP=85 km while at 42 km altitude with 25% fuel remaining. Fuel wasted.
+
+**Attempt 3:** Skipper + Jumbo-64 — Terrier fired during coast phase (throttle got reset from 0 to 1). Escape trajectory.
+
+**Attempt 4:** Skipper + Jumbo-64 — First stage too powerful, vessel exceeded orbital speed before staging. Negative circularization dV.
+
+**Attempt 5:** Skipper + X200-32 — Best ascent profile (AP=147 km at burnout). But circularization dV of 910 m/s exceeded the 500 m/s sanity check, and the Terrier burned at 25% throttle during coast.
+
+**Key learnings:**
+1. The Skipper + X200-32 was the right rocket size for this mission
+2. The throttle reset issue (engines firing during coast) was the most persistent problem
+3. The sanity checks were too restrictive and aborted valid burns
+4. Setting throttle to 0 BEFORE staging (not after) would fix the coast-phase burn issue
+
+**Postmortem for A5 written.**

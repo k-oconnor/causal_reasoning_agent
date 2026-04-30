@@ -49,14 +49,47 @@ def load_text(path: Path) -> str:
 
 
 def load_skills() -> list[str]:
-    """Load any .md files from the skills/ directory as reference material."""
+    """Load technical skills into the system prompt.
+
+    Methodology/process skills are instead copied to agent_workspace/ with a
+    SKILL_ prefix so the agent can read them on demand via read_file() without
+    bloating the system prompt on every call.
+    """
     if not SKILLS_DIR.exists():
         return []
+
+    # These go directly into the system prompt (technical reference, high reuse).
+    PROMPT_SKILLS = {
+        "krpc_basics",
+        "spacecraft_control",
+        "orbital_mechanics",
+        "mission_planning",
+        "krpc_expressions",
+        "ksp_parts",
+        "self_instrumentation",
+    }
+
+    # These are copied to agent_workspace as SKILL_*.md — readable on demand.
+    WORKSPACE_SKILLS = {
+        "postmortem_writing",
+        "data_analysis",
+        "workspace_workflow",
+    }
+
     docs = []
+    ws_root = ROOT / "agent_workspace"
+    ws_root.mkdir(exist_ok=True)
+
     for md in sorted(SKILLS_DIR.glob("*.md")):
         content = md.read_text(encoding="utf-8").strip()
-        if content:
+        if not content:
+            continue
+        if md.stem in PROMPT_SKILLS:
             docs.append(f"### {md.stem}\n\n{content}")
+        elif md.stem in WORKSPACE_SKILLS:
+            dest = ws_root / f"SKILL_{md.name}"
+            dest.write_text(content, encoding="utf-8")
+
     return docs
 
 
@@ -81,8 +114,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--max-tokens",
         type=int,
-        default=4096,
-        help="Max tokens per LLM completion (default: 4096)",
+        default=16384,
+        help="Max tokens per LLM completion (default: 16384)",
     )
     p.add_argument(
         "--output",
@@ -103,10 +136,16 @@ def parse_args() -> argparse.Namespace:
         help="Logging verbosity (default: INFO)",
     )
     p.add_argument(
+        "--feedback",
+        default="cli",
+        choices=["file", "cli", "ui"],
+        help="How to interact with the agent: cli (default), file, or ui",
+    )
+    p.add_argument(
         "--ui",
         action="store_true",
         default=False,
-        help="Open browser UI for agent communication (default: CLI)",
+        help="Shorthand for --feedback ui",
     )
     p.add_argument(
         "--ui-port",
@@ -187,11 +226,16 @@ def main() -> None:
     ft.register_all(registry)
     log.info("Registered file tools: save_file, read_file, list_files  [workspace: agent_workspace/]")
 
-    if args.ui:
+    feedback_mode = "ui" if args.ui else args.feedback
+    if feedback_mode == "ui":
         hi = HumanInterface(backend="web", web_port=args.ui_port)
-        log.info("Agent UI started — open http://localhost:%d", args.ui_port)
+        log.info("Agent UI started — open http://127.0.0.1:%d", args.ui_port)
+    elif feedback_mode == "file":
+        workspace_dir = str(ROOT / "agent_workspace")
+        hi = HumanInterface(backend="file", file_workspace=workspace_dir)
+        log.info("File feedback backend — reply to agent_workspace/OPERATOR_RESPONSE.txt")
     else:
-        hi = HumanInterface()
+        hi = HumanInterface(backend="cli")
         log.info("Using CLI backend for human interface")
     hi.register_all(registry)
     log.info("Registered human interface tools: human_notify, human_ask, human_confirm, plan_complete")
@@ -200,31 +244,147 @@ def main() -> None:
     from causal_agent import PLANNING_SYSTEM
     ksp_addendum = """
 
-## Eval-specific constraints
+## KSP domain context
 
-You are planning a Kerbal Space Program mission. Your deliverables are:
+You are a scientist whose goal is to achieve a stable Mun orbit in Kerbal
+Space Program 1.x via a kRPC Python script. The operator is your only sensor —
+they build the rocket, run the script, and report back observations.
 
-1. **Rocket manifest** — a complete stage table with exact KSP part names, per-stage
-   delta-v and TWR, decoupler placement, and SAS/RCS specification. Total dV must be
-   >= 5,250 m/s. First-stage TWR must be >= 1.3.
+The mission is complete when the operator confirms: periapsis >= 10 km,
+apoapsis <= 500 km, body = Mun, sustained for one full orbit with no thrust.
 
-2. **Flight script** — a complete, runnable Python kRPC script covering all four
-   mission phases (launch + gravity turn, circularization, Trans-Mun Injection, Mun
-   Orbit Insertion). Include the telemetry loop specified in the eval spec.
+### Installed game version and DLCs
+- **KSP 1.12.5** (not KSP 2 — do not confuse them)
+- **Making History** expansion installed — all MakingHistory parts are available
+- **Breaking Ground** expansion installed — all Serenity parts are available
 
-Consult the KSP wiki (https://wiki.kerbalspaceprogram.com) for exact part names,
-thrust, Isp, and mass figures. Use the community dV map to verify your budget.
-Do not invent part stats — look them up.
+The ksp_parts skill in your reference material was generated directly from
+this installation's GameData .cfg files. Parts marked `MakingHistory` or
+`Serenity` ARE available to the operator in the VAB. Use them.
 
-When you are ready to present the plan:
-1. Call save_file("manifest_attempt_1.md", <manifest content>) to write the rocket manifest.
-2. Call save_file("flight_attempt_1.py", <script content>) to write the flight script.
-3. Call human_notify with a brief summary and the file paths so the operator knows where to find them.
-4. Call human_confirm asking the operator to confirm they have the files and are ready to build.
-5. Call plan_complete with a one-paragraph summary. This terminates the session immediately.
+**Recommended Making History parts for this mission:**
+- `LiquidEngineRE-J10` — RE-J10 "Wolfhound" — 375 kN vac, Isp ~380 s, 3.3 t
+  (excellent high-efficiency upper stage or TMI/MOI engine)
+- `LiquidEngineLV-T91` — LV-T91 "Cheetah" — 125 kN vac, Isp ~355 s, 1.0 t
+  (lightweight vacuum engine, ideal for upper stage)
+- `LiquidEngineLV-TX87` — LV-TX87 "Bobcat" — 400 kN vac, Isp ~340 s, 2.0 t
+  (good mid-stage engine)
+- `Size1p5_Tank_*` series — FL-TX220/440/900/1800 tanks (1.875 m diameter,
+  between 1.25 m and 2.5 m — pair with the Cheetah or Wolfhound)
 
-Use list_files() at the start to check for prior attempt files from earlier runs.
-Do NOT keep researching or looping after step 5.
+### Domain knowledge sources
+- kRPC Python API: https://krpc.github.io/krpc/python/api/
+- Skills library in your context window (read these before web_search)
+
+Do NOT fetch the KSP wiki for part stats — search results mix up KSP1 and KSP2
+values. The ksp_parts skill has the exact stats from this installation's files.
+
+### What the reference material in your context contains
+Your context window begins with a ## Reference Material section containing
+skill documents on:
+  - krpc_basics: connection, speed measurement (use orbit.speed, NOT flight.speed),
+    streams, writing data files from flight scripts
+  - spacecraft_control: throttle, staging, autopilot, burn execution with
+    dual-condition stop (RDV + velocity fallback)
+  - orbital_mechanics: vis-viva, circularisation dV, TMI sweep pattern,
+    hyperbolic escape detection, SOI transitions
+  - mission_planning: Hohmann transfers, Mun dV budget, sanity checks
+  - krpc_expressions: events, streams, practical Mun mission patterns
+  - self_instrumentation: mandatory telemetry/burns/events file templates,
+    workspace path injection, robustness checklist
+  - ksp_parts: complete parts list generated from this installation's .cfg files
+
+Three additional skill files are in the workspace — read them when needed:
+  - SKILL_postmortem_writing.md  — hypothesis doc + postmortem templates
+  - SKILL_data_analysis.md       — how to parse telemetry/burns/events logs
+  - SKILL_workspace_workflow.md  — file naming, session-start, state recovery
+
+Read the context skills before searching the web. Read the workspace skills
+when writing your first hypothesis doc or your first postmortem.
+
+### Context budget — important
+Your context window is finite. To avoid overflow:
+- When reading telemetry files, read ONLY the current attempt's files.
+- Do NOT read prior attempts' raw data unless the postmortem is missing.
+- Read the latest postmortem (summary) rather than re-reading raw telemetry.
+- Keep web_search calls focused — one search per specific question.
+
+### Minimum required artifacts per attempt
+Before each experiment these files must exist in the workspace:
+
+- `hypotheses_N.md` — written BEFORE the experiment runs:
+    * Material uncertainties at this stage of the investigation
+    * Competing hypotheses for each uncertainty
+    * Specific predicted sensor readings for each hypothesis
+    * What this experiment is designed to test
+
+- `manifest_attempt_N.md` — full stage table with exact KSP 1.x part names,
+  per-stage ΔV and TWR, decoupler placement, SAS/RCS. Total ΔV >= 5,250 m/s.
+  First-stage TWR >= 1.3 at Kerbin sea level.
+
+  **Every attempt needs this file.** If the rocket is unchanged from attempt N−1,
+  still call `save_file("manifest_attempt_N.md", ...)` with a short stub that
+  states explicitly that the stack matches `manifest_attempt_(N-1).md` and lists
+  only operator-facing deltas (e.g. paint, tweak). Do not skip numbers — gaps
+  confuse reviewers and the operator.
+
+- `flight_attempt_N.py` — complete, runnable kRPC Python script.
+
+  **Self-reporting requirements (mandatory):**
+  The script MUST write its own data to the workspace. Use the absolute
+  path that list_files() prints for the workspace directory.
+
+  Required output files the script must create:
+  * `telemetry_attempt_N.txt` — one row every 5 s of game time:
+    [T+{s}s] ALT={m} SURF_ALT={m} SPD={m/s} AP={m} PE={m} BODY={name}
+    FUEL={pct}% PHASE={name} THROTTLE={0-1} STAGE={n}
+  * `burns_attempt_N.txt` — one row every 0.25 s during any active burn:
+    [T+{s}s] PHASE={name} THROTTLE={0-1} REMAINING_DV={m/s} AP={m} PE={m}
+  * `events_attempt_N.txt` — one row per discrete event (staging, phase
+    transition, node creation/removal, SOI change, script exception):
+    [T+{s}s] EVENT={type} DETAIL={value}
+
+  The script must write these files whether the flight succeeds or fails.
+  Use try/finally so data is flushed even on exception.
+
+After each failed experiment these files must also exist:
+
+- `postmortem_N.md` — written AFTER reading and analysing telemetry,
+  BEFORE the next attempt:
+    * Computed quantities from the data (dV used per phase, burn durations,
+      AP/PE at each phase transition, fuel remaining at staging)
+    * Which predicted readings were confirmed, which were violated (cite
+      exact values and timestamps)
+    * Root cause stated as a falsifiable claim
+    * Targeted fix and mechanistic reason it addresses the root cause
+    * What the next experiment will specifically prove or disprove
+
+### Per-experiment loop
+
+1. save_file("hypotheses_N.md", ...)       ← before writing the script
+2. save_file("manifest_attempt_N.md", ...)
+3. save_file("flight_attempt_N.py", ...)   ← script writes its own data files
+4. human_notify("Attempt N ready — files saved. Script will auto-write
+   telemetry_attempt_N.txt, burns_attempt_N.txt, events_attempt_N.txt.")
+5. human_ask(
+     "Build to manifest_attempt_N.md, connect kRPC, run flight_attempt_N.py. "
+     "When it finishes or crashes, type 'done: <one line on how it ended>'. "
+     "I will read the data files myself."
+   )
+   ← BLOCKS until operator responds
+6. read_file("telemetry_attempt_N.txt")
+   read_file("burns_attempt_N.txt")
+   read_file("events_attempt_N.txt")
+   ← analyse the raw data yourself; do not skip this step
+7. save_file("postmortem_N.md", ...)       ← written from data analysis
+8. If SUCCESS confirmed by telemetry → call plan_complete.
+   If FAILURE → increment N, go to step 1.
+
+The operator's job is only to trigger the experiment and report completion.
+All data collection and analysis is yours.
+
+Do NOT call plan_complete until telemetry confirms PE >= 10 km, AP <= 500 km,
+BODY = Mun, sustained for one full orbit period with THROTTLE = 0.
 """
     system_prompt = PLANNING_SYSTEM + ksp_addendum
 
@@ -254,7 +414,8 @@ Do NOT keep researching or looping after step 5.
 
     result = planner.run(goal=goal)
 
-    # Notify the UI that the session is done
+    # Signal the UI that the session has finished.
+    # The planner already forwarded any un-notified content to the UI internally.
     if args.ui and hasattr(hi, "_server"):
         hi._server.complete(result.summary())
 

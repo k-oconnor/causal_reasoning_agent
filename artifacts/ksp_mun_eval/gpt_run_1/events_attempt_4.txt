@@ -1,0 +1,16 @@
+[T+0s] EVENT=SCRIPT_START DETAIL= BODY=Kerbin ALT=80m
+[T+2s] EVENT=LAUNCH DETAIL= BODY=Kerbin ALT=81m
+[T+2s] EVENT=STAGE_1 DETAIL=liftoff BODY=Kerbin ALT=81m
+[T+2s] EVENT=VESSEL_REFRESH DETAIL=post_launch BODY=Kerbin ALT=81m
+[T+16s] EVENT=GRAVITY_TURN_START DETAIL= BODY=Kerbin ALT=1005m
+[T+45s] EVENT=STAGE_0 DETAIL=srb_separation BODY=Kerbin ALT=9282m
+[T+45s] EVENT=VESSEL_REFRESH DETAIL=after_srb_sep BODY=Kerbin ALT=9282m
+[T+308s] EVENT=APOAPSIS_COAST_START DETAIL=AP=90151 BODY=Kerbin ALT=46635m
+[T+4933s] EVENT=SCRIPT_EXCEPTION DETAIL=RuntimeError('Timeout in phase TO_AP_FOR_CIRC') BODY=Kerbin ALT=14825356m
+Traceback (most recent call last):
+  File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_4.py", line 405, in <module>
+    coast_until(tf, sc, launch_ut_main, 'TO_AP_FOR_CIRC', lambda: refresh_vessel(sc).orbit.time_to_apoapsis < 25, timeout=4000)
+  File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_4.py", line 109, in coast_until
+    raise RuntimeError(f"Timeout in phase {phase}")
+RuntimeError: Timeout in phase TO_AP_FOR_CIRC
+

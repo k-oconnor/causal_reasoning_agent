@@ -34,7 +34,9 @@ Usage
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Literal
 
 from causal_agent.tools import ToolDefinition, ToolRegistry
@@ -62,9 +64,24 @@ class _Backend(ABC):
 # ---------------------------------------------------------------------------
 
 class CliBackend(_Backend):
-    """Prints to stdout and reads from stdin."""
+    """Prints to stdout and reads from the real console (not stdin)."""
 
     _BORDER = "─" * 60
+
+    def _readline(self, prompt: str) -> str:
+        """Read a line directly from the console device, bypassing stdin."""
+        import sys
+        # Write the prompt to stderr so it appears even if stdout is redirected
+        sys.stderr.write(prompt)
+        sys.stderr.flush()
+        try:
+            # Open the real console device to avoid reading from a pipe/file
+            dev = "CON" if sys.platform == "win32" else "/dev/tty"
+            with open(dev, "r", encoding="utf-8", errors="replace") as tty:
+                return tty.readline().rstrip("\n").rstrip("\r")
+        except OSError:
+            # Fall back to plain input() if the console device isn't available
+            return input(prompt)
 
     def notify(self, message: str) -> None:
         print(f"\n{self._BORDER}")
@@ -77,10 +94,7 @@ class CliBackend(_Backend):
         print(f"[AGENT] {question}")
         print(self._BORDER)
         log.info("human_ask: %s", question)
-        try:
-            response = input("Your response: ").strip()
-        except EOFError:
-            response = ""
+        response = self._readline("Your response: ").strip()
         log.info("human_ask response: %r", response)
         return response
 
@@ -90,10 +104,7 @@ class CliBackend(_Backend):
         print(self._BORDER)
         log.info("human_confirm: %s", message)
         while True:
-            try:
-                raw = input("Confirm? [yes/no]: ").strip().lower()
-            except EOFError:
-                raw = "no"
+            raw = self._readline("Confirm? [yes/no]: ").strip().lower()
             if raw in ("yes", "y"):
                 log.info("human_confirm response: yes")
                 return True
@@ -101,6 +112,90 @@ class CliBackend(_Backend):
                 log.info("human_confirm response: no")
                 return False
             print("Please type 'yes' or 'no'.")
+
+
+# ---------------------------------------------------------------------------
+# File backend — stdin-independent, works in any terminal environment
+# ---------------------------------------------------------------------------
+
+class FileBackend(_Backend):
+    """
+    Communicates via plain text files in a directory (default: agent_workspace/).
+
+    When the agent calls human_ask or human_confirm, it writes:
+        WAITING_FOR_OPERATOR.txt   — contains the question / prompt
+
+    You respond by creating:
+        OPERATOR_RESPONSE.txt      — plain text, your reply
+
+    The backend polls every second until the response file appears, reads it,
+    deletes it, and continues.  human_notify just appends to AGENT_NOTIFY.txt.
+    """
+
+    WAITING_FILE = "WAITING_FOR_OPERATOR.txt"
+    RESPONSE_FILE = "OPERATOR_RESPONSE.txt"
+    NOTIFY_FILE = "AGENT_NOTIFY.txt"
+    POLL_INTERVAL = 1.0  # seconds
+
+    def __init__(self, workspace: Path | str = "agent_workspace") -> None:
+        self._ws = Path(workspace)
+        self._ws.mkdir(parents=True, exist_ok=True)
+        # Clear any stale files from a previous run
+        for f in (self.WAITING_FILE, self.RESPONSE_FILE):
+            (self._ws / f).unlink(missing_ok=True)
+
+    def notify(self, message: str) -> None:
+        notify_path = self._ws / self.NOTIFY_FILE
+        with notify_path.open("a", encoding="utf-8") as fh:
+            fh.write(f"\n{'─'*60}\n[AGENT NOTIFY]\n{message}\n")
+        log.info("human_notify: %s", message)
+        # Also print so it's visible in the terminal
+        print(f"\n{'─'*60}\n[AGENT] {message}\n{'─'*60}")
+
+    def ask(self, question: str) -> str:
+        return self._prompt(question, kind="ASK")
+
+    def confirm(self, message: str) -> bool:
+        prompt = message + "\n\nReply with: yes / no"
+        raw = self._prompt(prompt, kind="CONFIRM").strip().lower()
+        return raw in ("yes", "y")
+
+    def _prompt(self, text: str, kind: str) -> str:
+        waiting = self._ws / self.WAITING_FILE
+        response = self._ws / self.RESPONSE_FILE
+        response.unlink(missing_ok=True)
+
+        # Write the question
+        waiting.write_text(
+            f"[{kind}]\n{text}\n\n"
+            f"→ Write your reply to: {response.name}\n"
+            f"  (create the file in {self._ws.resolve()})\n",
+            encoding="utf-8",
+        )
+        log.info("human_%s: wrote prompt to %s", kind.lower(), waiting)
+        print(f"\n{'─'*60}")
+        print(f"[AGENT {kind}] {text}")
+        print(f"→ Write your reply to:  {response.resolve()}")
+        print(f"{'─'*60}")
+
+        # Poll for the response file.  Wait until content is non-empty AND
+        # has been stable (unchanged) for 2 consecutive checks 1 s apart —
+        # this gives the user time to finish writing before we consume it.
+        prev_content: str | None = None
+        while True:
+            if response.exists():
+                content = response.read_text(encoding="utf-8").strip()
+                if content and content == prev_content:
+                    # Stable — safe to consume
+                    response.unlink(missing_ok=True)
+                    waiting.unlink(missing_ok=True)
+                    log.info("human_%s response: %r", kind.lower(), content)
+                    print(f"[OPERATOR] {content}\n")
+                    return content
+                prev_content = content
+            else:
+                prev_content = None
+            time.sleep(self.POLL_INTERVAL)
 
 
 # ---------------------------------------------------------------------------
@@ -154,14 +249,17 @@ class HumanInterface:
 
     def __init__(
         self,
-        backend: Literal["cli", "silent", "web"] | _Backend = "cli",
+        backend: Literal["cli", "file", "silent", "web"] | _Backend = "cli",
         silent_response: str = "ok",
         silent_confirm: bool = True,
         web_port: int = 8765,
+        file_workspace: str = "agent_workspace",
     ) -> None:
         if isinstance(backend, str):
             if backend == "cli":
                 self._backend: _Backend = CliBackend()
+            elif backend == "file":
+                self._backend = FileBackend(workspace=file_workspace)
             elif backend == "silent":
                 self._backend = SilentBackend(silent_response, silent_confirm)
             elif backend == "web":
@@ -171,7 +269,7 @@ class HumanInterface:
                 self._backend = WebBackend(server)
                 self._server = server
                 import webbrowser, threading
-                threading.Timer(0.5, lambda: webbrowser.open(f"http://localhost:{web_port}")).start()
+                threading.Timer(0.5, lambda: webbrowser.open(f"http://127.0.0.1:{web_port}")).start()
             else:
                 raise ValueError(f"Unknown backend {backend!r}. Use 'cli', 'silent', or 'web'.")
         else:

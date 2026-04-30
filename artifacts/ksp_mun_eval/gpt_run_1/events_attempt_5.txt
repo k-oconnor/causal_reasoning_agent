@@ -1,0 +1,23 @@
+[T+0s] EVENT=SCRIPT_START DETAIL= BODY=Kerbin ALT=80m
+[T+2s] EVENT=LAUNCH DETAIL= BODY=Kerbin ALT=81m
+[T+2s] EVENT=STAGE_1 DETAIL=liftoff BODY=Kerbin ALT=81m
+[T+2s] EVENT=VESSEL_REFRESH DETAIL=post_launch BODY=Kerbin ALT=81m
+[T+16s] EVENT=GRAVITY_TURN_START DETAIL= BODY=Kerbin ALT=1005m
+[T+48s] EVENT=STAGE_0 DETAIL=srb_separation BODY=Kerbin ALT=7535m
+[T+48s] EVENT=VESSEL_REFRESH DETAIL=after_srb_sep BODY=Kerbin ALT=7535m
+[EVENT ERROR] string[] string.Split(char,System.StringSplitOptions)
+Server stack trace:
+  at KRPC.Service.Services.ExecuteCall (KRPC.Service.Scanner.ProcedureSignature procedure, System.Object[] arguments) [0x0001b] in <721f168820194101b819b3da6b33b716>:0 
+Traceback (most recent call last):
+  File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_5.py", line 363, in <module>
+    surf = vessel.flight(vessel.surface_reference_frame)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kevin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\krpc\services\spacecenter.py", line 24895, in surface_reference_frame
+    return self._client._invoke(
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kevin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\krpc\client.py", line 194, in _invoke
+    raise self._build_error(response.results[0].error)
+krpc.error.RPCError: string[] string.Split(char,System.StringSplitOptions)
+Server stack trace:
+  at KRPC.Service.Services.ExecuteCall (KRPC.Service.Scanner.ProcedureSignature procedure, System.Object[] arguments) [0x0001b] in <721f168820194101b819b3da6b33b716>:0 
+
