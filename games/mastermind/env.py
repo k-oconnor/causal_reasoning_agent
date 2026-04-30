@@ -140,9 +140,7 @@ class MastermindEnv(GameEnvironment):
     def action_specs(self, agent_id: str) -> list[ActionSpec]:
         if self._terminal:
             return []
-        example = list(self._colors[: self._code_length])
-        if len(example) < self._code_length:
-            example.extend([self._colors[0]] * (self._code_length - len(example)))
+        example = self._fallback_guess_example()
         return [
             ActionSpec(
                 action_type="guess",
@@ -241,6 +239,18 @@ class MastermindEnv(GameEnvironment):
                 if _score_guess_against(guess, code) == feedback
             ]
         return candidates
+
+    def _fallback_guess_example(self) -> list[str]:
+        if self._history:
+            guessed = {tuple(record["guess"]) for record in self._history}
+            for candidate in self._remaining_candidates():
+                if candidate not in guessed:
+                    return list(candidate)
+
+        example = list(self._colors[: self._code_length])
+        if len(example) < self._code_length:
+            example.extend([self._colors[0]] * (self._code_length - len(example)))
+        return example
 
     def initial_kripke(self, agent_id: str):
         from causal_agent.kripke import KripkeModel, World

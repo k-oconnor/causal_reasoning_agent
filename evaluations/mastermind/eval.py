@@ -130,6 +130,27 @@ def choose_candidate(state: MastermindEvalState, rng: random.Random) -> Guess:
     return choose_random(state, rng)
 
 
+def repair_repeated_llm_guess(
+    state: MastermindEvalState,
+    guess: Sequence[str],
+) -> tuple[Guess, str]:
+    remaining = consistent_candidates(state)
+    if not remaining:
+        return list(guess), ""
+
+    guess_tuple = tuple(guess)
+    if len(remaining) == 1 and guess_tuple != remaining[0]:
+        return list(remaining[0]), "only_remaining_candidate"
+
+    guessed = {tuple(record["guess"]) for record in state.history}
+    if guess_tuple in guessed:
+        for candidate in remaining:
+            if candidate not in guessed:
+                return list(candidate), "repeated_guess_replaced_with_candidate"
+
+    return list(guess), ""
+
+
 def choose_knuth(state: MastermindEvalState, rng: random.Random) -> Guess:
     remaining = consistent_candidates(state)
     if len(remaining) <= 1:
@@ -264,6 +285,8 @@ def run_episode(
             )
             before_remaining = len(consistent_candidates(state))
             plan = None
+            raw_guess: Guess | None = None
+            repair_reason = ""
 
             if policy_name == "llm":
                 event = feedback_processor.process(obs, turn)
@@ -300,6 +323,15 @@ def run_episode(
                 )
                 invalid_moves += invalid_count
                 guess = list(action.payload["code"])
+                repaired_guess, repair_reason = repair_repeated_llm_guess(state, guess)
+                if repair_reason:
+                    raw_guess = guess
+                    guess = repaired_guess
+                    action = GameAction(
+                        action_type="guess",
+                        payload={"code": guess},
+                        agent_id="Agent",
+                    )
             else:
                 if policy is None:
                     raise ValueError(f"Unknown policy: {policy_name}")
@@ -331,6 +363,15 @@ def run_episode(
                     )
                     invalid_moves += invalid_count
                     guess = list(action.payload["code"])
+                    repaired_guess, repair_reason = repair_repeated_llm_guess(state, guess)
+                    if repair_reason:
+                        raw_guess = guess
+                        guess = repaired_guess
+                        action = GameAction(
+                            action_type="guess",
+                            payload={"code": guess},
+                            agent_id="Agent",
+                        )
                     feedback = env.step("Agent", action)
             if feedback.get("kind") == "illegal_move":
                 invalid_moves += 1
@@ -356,7 +397,9 @@ def run_episode(
                 "max_attempts": max_attempts,
                 "duplicates_allowed": duplicates_allowed,
                 "secret": secret,
+                "raw_guess": raw_guess or guess,
                 "guess": guess,
+                "repair_reason": repair_reason,
                 "feedback": feedback["content"],
                 "exact": final_exact,
                 "partial": final_partial,

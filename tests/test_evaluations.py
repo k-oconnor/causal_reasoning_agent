@@ -9,6 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluations.common import TraceLogger, dataclass_to_dict, write_summary
+from evaluations.mastermind.eval import (
+    MastermindEvalState,
+    generate_all_codes,
+    repair_repeated_llm_guess,
+    score_guess,
+)
 
 
 @dataclass
@@ -39,6 +45,23 @@ class EvaluationCommonTests(unittest.TestCase):
                 dataclass_to_dict(_TinyResult(episode=2, score=64)),
                 {"episode": 2, "score": 64},
             )
+
+    def test_mastermind_repeated_llm_guess_repaired_to_candidate(self) -> None:
+        colors = ["red", "blue", "green", "yellow", "orange", "purple"]
+        first_guess = ["red", "blue", "green", "yellow"]
+        state = MastermindEvalState(
+            colors=colors,
+            code_length=4,
+            duplicates_allowed=False,
+            history=[{"guess": first_guess, "exact": 0, "partial": 3}],
+            all_codes=generate_all_codes(colors, 4, False),
+        )
+
+        repaired, reason = repair_repeated_llm_guess(state, first_guess)
+
+        self.assertEqual(reason, "repeated_guess_replaced_with_candidate")
+        self.assertNotEqual(repaired, first_guess)
+        self.assertEqual(score_guess(first_guess, repaired), (0, 3))
 
 
 class EvaluationSmokeTests(unittest.TestCase):
@@ -91,4 +114,3 @@ class EvaluationSmokeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -128,6 +128,30 @@ class GameSmokeTests(unittest.TestCase):
             for world in shrunk.worlds
         ))
 
+    def test_mastermind_action_spec_example_uses_unguessed_candidate(self) -> None:
+        agent_id = "Agent"
+        env = MastermindEnv(
+            colors=["red", "blue", "green", "yellow", "orange", "purple"],
+            code_length=4,
+            duplicates_allowed=False,
+            secret=["orange", "red", "yellow", "blue"],
+            agent_id=agent_id,
+        )
+        first_guess = ["red", "blue", "green", "yellow"]
+        env.step(agent_id, GameAction("guess", {"code": first_guess}, agent_id))
+
+        example = env.action_specs(agent_id)[0].examples[0]["code"]
+
+        from causal_agent.mastermind_tools import score_guess
+
+        first_feedback = env.history[0]
+        self.assertNotEqual(example, first_guess)
+        self.assertEqual(len(set(example)), len(example))
+        self.assertEqual(
+            score_guess(first_guess, example),
+            (first_feedback["exact"], first_feedback["partial"]),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
