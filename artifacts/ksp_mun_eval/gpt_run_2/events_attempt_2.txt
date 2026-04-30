@@ -1,0 +1,11 @@
+[T+0s] EVENT=SCRIPT_START DETAIL=attempt_2 BODY=Kerbin ALT=81m
+[T+1s] EVENT=LAUNCH DETAIL=ignite_all BODY=Kerbin ALT=83m
+[T+13s] EVENT=GRAVITY_TURN_START DETAIL=pitch=88.4 BODY=Kerbin ALT=1518m
+[T+66s] EVENT=STAGE DETAIL=booster_separation BODY=Kerbin ALT=23580m
+[T+92s] EVENT=AP_TARGET_REACHED DETAIL=AP=85141 BODY=Kerbin ALT=41137m
+[T+92s] EVENT=MAX_Q DETAIL=28839 BODY=Kerbin ALT=41137m
+[T+92s] EVENT=APOAPSIS_COAST_START DETAIL= BODY=Kerbin ALT=41137m
+[T+199s] EVENT=NODE_CREATED DETAIL=CIRCULARIZE dv=935.4 BODY=Kerbin ALT=83220m
+[T+0s] EVENT=EXCEPTION DETAIL=RPCError:string[] string.Split(char,System.StringSplitOptions)
+Server stack trace:
+  at KRPC.Service.Services.ExecuteCall (KRPC.Service.Scanner.ProcedureSignature procedure, System.Object[] arguments) [0x0001b] in <721f168820194101b819b3da6b33b716>:0  TRACE=Traceback (most recent call last): |   File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_2.py", line 411, in <module> |     main() |   File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_2.py", line 298, in main |     execute_node(conn, sc, ef, tf, bf, launch_ut, node, 'CIRCULARIZE') |   File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_2.py", line 147, in execute_node |     target_dv = max(node.delta_v, 0.1) |                     ^^^^^^^^^^^^ |   File "C:\Users\kevin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\krpc\services\spacecenter.py", line 13655, in delta_v |     return self._client._invoke( |            ^^^^^^^^^^^^^^^^^^^^^ |   File "C:\Users\kevin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\krpc\client.py", line 194, in _invoke |     raise self._build_error(response.results[0].error) | krpc.error.RPCError: string[] string.Split(char,System.StringSplitOptions) | Server stack trace: |   at KRPC.Service.Services.ExecuteCall (KRPC.Service.Scanner.ProcedureSignature procedure, System.Object[] arguments) [0x0001b] in <721f168820194101b819b3da6b33b716>:0  | 

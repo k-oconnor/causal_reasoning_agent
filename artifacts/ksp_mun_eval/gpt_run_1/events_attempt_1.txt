@@ -1,0 +1,13 @@
+[T+0s] EVENT=SCRIPT_START DETAIL= BODY=Kerbin ALT=80m
+[T+2s] EVENT=LAUNCH DETAIL= BODY=Kerbin ALT=81m
+[T+2s] EVENT=STAGE_4 DETAIL=liftoff BODY=Kerbin ALT=81m
+[T+1s] EVENT=SCRIPT_EXCEPTION DETAIL=AttributeError("'Engine' object has no attribute 'engine'") BODY=Kerbin ALT=81m
+Traceback (most recent call last):
+  File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_1.py", line 353, in <module>
+    active_srb = [e for e in vessel.parts.engines if e.engine.part.title == 'BACC "Thumper" Solid Fuel Booster' and e.active]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_1.py", line 353, in <listcomp>
+    active_srb = [e for e in vessel.parts.engines if e.engine.part.title == 'BACC "Thumper" Solid Fuel Booster' and e.active]
+                                                     ^^^^^^^^
+AttributeError: 'Engine' object has no attribute 'engine'
+
