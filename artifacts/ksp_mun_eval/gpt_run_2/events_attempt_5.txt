@@ -1,0 +1,52 @@
+[T+0s] EVENT=SCRIPT_START DETAIL=attempt_5 BODY=Kerbin ALT=81m
+[T+1s] EVENT=LAUNCH DETAIL=mainsail_ignite BODY=Kerbin ALT=83m
+[T+1s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1380685.2 avail=1380689.4 fuel_pct=99.2 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=83m
+[T+3s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1381914.0 avail=1381934.0 fuel_pct=96.4 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=143m
+[T+5s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1384799.5 avail=1384835.5 fuel_pct=93.5 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=283m
+[T+7s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1389233.1 avail=1389283.2 fuel_pct=90.6 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=507m
+[T+9s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1394967.1 avail=1395029.4 fuel_pct=87.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=812m
+[T+11s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=981169.8 avail=1401737.4 fuel_pct=85.6 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=1194m
+[T+12s] EVENT=GRAVITY_TURN_START DETAIL=pitch=88.0 BODY=Kerbin ALT=1518m
+[T+13s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=985971.9 avail=1408599.6 fuel_pct=83.5 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=1618m
+[T+15s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=636997.4 avail=1415618.4 fuel_pct=81.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=2089m
+[T+17s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=640077.8 avail=1422459.8 fuel_pct=80.4 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=2592m
+[T+19s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1000191.2 avail=1428905.6 fuel_pct=79.0 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=3110m
+[T+21s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=645700.2 avail=1434946.8 fuel_pct=77.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=3640m
+[T+23s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=648297.6 avail=1440715.8 fuel_pct=76.3 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=4193m
+[T+25s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=650733.1 avail=1446125.0 fuel_pct=75.0 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=4759m
+[T+27s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=653039.8 avail=1451248.4 fuel_pct=73.6 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=5345m
+[T+29s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1019297.8 avail=1456185.9 fuel_pct=72.1 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=5963m
+[T+31s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1022527.2 avail=1460796.9 fuel_pct=70.4 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=6597m
+[T+33s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1025535.6 avail=1465091.6 fuel_pct=68.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=7246m
+[T+36s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1028407.6 avail=1469191.9 fuel_pct=66.9 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=7930m
+[T+38s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1031033.8 avail=1472941.0 fuel_pct=65.0 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=8623m
+[T+40s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1033486.2 avail=1476441.2 fuel_pct=63.0 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=9349m
+[T+42s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1035730.7 avail=1479644.6 fuel_pct=60.9 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=10113m
+[T+44s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1037711.6 avail=1482471.4 fuel_pct=58.9 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=10894m
+[T+46s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1039490.4 avail=1485009.8 fuel_pct=56.9 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=11709m
+[T+48s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1041113.8 avail=1487326.2 fuel_pct=54.8 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=12582m
+[T+50s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1042532.7 avail=1489351.2 fuel_pct=52.8 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=13486m
+[T+52s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1043790.1 avail=1491145.2 fuel_pct=50.8 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=14439m
+[T+54s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1044898.4 avail=1492726.4 fuel_pct=48.8 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=15456m
+[T+56s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1045851.3 avail=1494085.8 fuel_pct=46.8 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=16527m
+[T+58s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1046656.6 avail=1495234.1 fuel_pct=44.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=17643m
+[T+60s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1047338.6 avail=1496206.6 fuel_pct=42.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=18827m
+[T+62s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1497000.0 avail=1497007.1 fuel_pct=40.4 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=20073m
+[T+64s] EVENT=STAGE_CHECK DETAIL=stage=2 active_engines=1 has_fuel=1 thrust=1497664.0 avail=1497670.1 fuel_pct=37.5 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=21400m
+[T+64s] EVENT=STAGE_TRIGGER DETAIL=mainsail_to_bobcat all_no_fuel=1 thrust_collapse=1 BODY=Kerbin ALT=21563m
+[T+67s] EVENT=STAGE DETAIL=mainsail_to_bobcat BODY=Kerbin ALT=22989m
+[T+67s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399632.8 avail=399633.7 fuel_pct=97.9 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=22989m
+[T+69s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399718.8 avail=399719.5 fuel_pct=95.8 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=24412m
+[T+71s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399783.8 avail=399784.3 fuel_pct=93.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=25848m
+[T+73s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399833.1 avail=399833.5 fuel_pct=91.7 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=27282m
+[T+75s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399871.5 avail=399871.8 fuel_pct=89.6 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=28730m
+[T+77s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399901.2 avail=399901.5 fuel_pct=87.5 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=30219m
+[T+79s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399923.1 avail=399923.3 fuel_pct=85.4 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=31692m
+[T+81s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399940.2 avail=399940.3 fuel_pct=83.3 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=33220m
+[T+83s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399953.2 avail=399953.3 fuel_pct=81.2 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=34714m
+[T+85s] EVENT=STAGE_CHECK DETAIL=stage=1 active_engines=1 has_fuel=1 thrust=399963.3 avail=399963.5 fuel_pct=79.2 all_no_fuel=0 thrust_collapse=0 BODY=Kerbin ALT=36201m
+[T+87s] EVENT=AP_TARGET_REACHED DETAIL=AP=85148 BODY=Kerbin ALT=37384m
+[T+87s] EVENT=MAX_Q DETAIL=25183 BODY=Kerbin ALT=37384m
+[T+87s] EVENT=APOAPSIS_COAST_START DETAIL= BODY=Kerbin ALT=37384m
+[T+349s] EVENT=CIRC_START DETAIL=AP=84149 PE=-489598 BODY=Kerbin ALT=36680m
+[T+419s] EVENT=ABORT DETAIL=fuel_low_during_circularize BODY=Kerbin ALT=-0m

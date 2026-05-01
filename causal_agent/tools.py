@@ -224,6 +224,11 @@ class ToolRegistry:
             content=content,
         )
 
+    def dispatch_by_name(self, name: str, arguments: dict[str, Any]) -> ToolResult:
+        """Convenience wrapper — dispatch without constructing a ToolCall first."""
+        tc = ToolCall(id=f"internal_{name}", name=name, arguments=arguments)
+        return self.dispatch(tc)
+
     def __bool__(self) -> bool:
         return bool(self._entries)
 

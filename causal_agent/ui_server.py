@@ -350,10 +350,10 @@ function handle(msg) {
 }
 
 function connect() {
-  ws = new WebSocket(`ws://localhost:${PORT}/ws`);
+  ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   ws.onopen  = () => setConn(true, 'Connected');
   ws.onclose = () => { setConn(false, 'Disconnected — retrying…'); setTimeout(connect, 2000); };
-  ws.onerror = () => setConn(false, 'Error');
+  ws.onerror = () => setConn(false, 'Error — retrying…');
   ws.onmessage = e => handle(JSON.parse(e.data));
 }
 
@@ -395,6 +395,9 @@ class AgentUIServer:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._ready = threading.Event()
         self._lock = threading.Lock()
+        # All messages ever sent, in order.  Replayed to late-connecting clients
+        # so they never miss a notify/complete that arrived before the WS opened.
+        self._buffer: list[dict] = []
         self._app = self._build_app()
 
     # ------------------------------------------------------------------
@@ -405,7 +408,7 @@ class AgentUIServer:
         t = threading.Thread(target=self._run, daemon=True, name="agent-ui-server")
         t.start()
         self._ready.wait(timeout=10)
-        log.info("Agent UI ready at http://localhost:%d", self.port)
+        log.info("Agent UI ready at http://127.0.0.1:%d", self.port)
 
     def notify(self, message: str) -> None:
         self._send({"type": "notify", "message": message})
@@ -460,8 +463,12 @@ class AgentUIServer:
     async def _broadcast(self, msg: dict) -> None:
         import json
         payload = json.dumps(msg, ensure_ascii=False)
+        # Buffer every message so late-connecting clients get the full history.
         with self._lock:
+            self._buffer.append(msg)
             clients = list(self._clients)
+        if not clients:
+            log.debug("UI broadcast queued (no clients): %s", msg.get("type"))
         dead: set[Any] = set()
         for ws in clients:
             try:
@@ -496,10 +503,17 @@ class AgentUIServer:
 
         @app.websocket("/ws")
         async def _ws(websocket: WebSocket):
+            import json as _json
             await websocket.accept()
             with self._lock:
+                backlog = list(self._buffer)
                 self._clients.add(websocket)
-            log.info("UI client connected")
+            log.info("UI client connected (replaying %d buffered messages)", len(backlog))
+            for msg in backlog:
+                try:
+                    await websocket.send_text(_json.dumps(msg, ensure_ascii=False))
+                except Exception:
+                    break
             try:
                 while True:
                     data = await websocket.receive_json()
@@ -537,7 +551,7 @@ class AgentUIServer:
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         uvicorn.run(
             self._app,
-            host="localhost",
+            host="127.0.0.1",
             port=self.port,
             log_level="error",
             access_log=False,

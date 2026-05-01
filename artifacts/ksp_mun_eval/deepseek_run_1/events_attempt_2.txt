@@ -1,0 +1,17 @@
+[T+0s] EVENT=LAUNCH BODY=Kerbin ALT=79m STAGE=6 
+[T+1s] EVENT=LIFTOFF BODY=Kerbin ALT=80m STAGE=5 
+[T+126s] EVENT=APOAPSIS_REACHED BODY=Kerbin ALT=41606m STAGE=5 AP=85078m
+[T+126s] EVENT=ENGINE_CUT BODY=Kerbin ALT=41606m STAGE=5 AP=85078m ALT=41606m
+[T+126s] EVENT=APOAPSIS_COAST_START BODY=Kerbin ALT=41606m STAGE=5 
+[T+157s] EVENT=STAGING BODY=Kerbin ALT=62903m STAGE=5 FUEL_DEPLETED
+[T+159s] EVENT=STAGING BODY=Kerbin ALT=64523m STAGE=4 NO_ACTIVE_ENGINES
+[T+272s] EVENT=STAGING BODY=Kerbin ALT=190968m STAGE=3 FUEL_DEPLETED
+[T+274s] EVENT=STAGING BODY=Kerbin ALT=194472m STAGE=2 NO_ACTIVE_ENGINES
+[T+431s] EVENT=STAGING BODY=Kerbin ALT=609155m STAGE=1 FUEL_DEPLETED
+[EVENT ERROR] No such vessel 6d5c2656-2e67-4b45-8082-e288df2eeaf4
+Server stack trace:
+  at KRPC.SpaceCenter.FlightGlobalsExtensions.GetVesselById (System.Guid id) [0x0008a] in <d8566df5220a4070afa44bd2ecc53aa8>:0 
+  at KRPC.SpaceCenter.Services.Vessel.get_InternalVessel () [0x00006] in <d8566df5220a4070afa44bd2ecc53aa8>:0 
+  at KRPC.SpaceCenter.Services.Vessel.get_Orbit () [0x00000] in <d8566df5220a4070afa44bd2ecc53aa8>:0 
+  at (wrapper managed-to-native) System.Reflection.MonoMethod.InternalInvoke(System.Reflection.MonoMethod,object,object[],System.Exception&)
+  at System.Reflection.MonoMethod.Invoke (System.Object obj, System.Reflection.BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x00032] in <9577ac7a62ef43179789031239ba8798>:0 

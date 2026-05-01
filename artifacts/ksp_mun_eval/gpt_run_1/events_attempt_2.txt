@@ -1,0 +1,31 @@
+[T+0s] EVENT=SCRIPT_START DETAIL= BODY=Kerbin ALT=80m
+[T+2s] EVENT=LAUNCH DETAIL= BODY=Kerbin ALT=81m
+[T+2s] EVENT=STAGE_2 DETAIL=liftoff BODY=Kerbin ALT=81m
+[T+15s] EVENT=GRAVITY_TURN_START DETAIL= BODY=Kerbin ALT=1015m
+[T+44s] EVENT=STAGE_1 DETAIL=srb_separation BODY=Kerbin ALT=9219m
+[T+163s] EVENT=STAGE_0 DETAIL=ascent_auto_stage BODY=Kerbin ALT=49000m
+[T+194s] EVENT=APOAPSIS_COAST_START DETAIL=AP=90041 BODY=Kerbin ALT=58977m
+[T+379s] EVENT=NODE_CREATED:CIRCULARIZE DETAIL=dv=232.80 BODY=Kerbin ALT=89561m
+[EVENT ERROR] string[] string.Split(char,System.StringSplitOptions)
+Server stack trace:
+  at KRPC.Service.Services.ExecuteCall (KRPC.Service.Scanner.ProcedureSignature procedure, System.Object[] arguments) [0x0001b] in <721f168820194101b819b3da6b33b716>:0 
+Traceback (most recent call last):
+  File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_2.py", line 383, in <module>
+    execute_node(conn, vessel, sc, tf, bf, ef, launch_ut_main, node, 'CIRCULARIZE')
+  File "C:\Users\kevin\OneDrive\Desktop\causal_reasoning_agent\agent_workspace\flight_attempt_2.py", line 151, in execute_node
+    ap.wait()
+  File "C:\Users\kevin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\krpc\services\spacecenter.py", line 2567, in wait
+    return self._client._invoke(
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kevin\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\krpc\client.py", line 190, in _invoke
+    raise self._build_error(response.error)
+ValueError: No such vessel fb873544-9cda-4c07-8b7f-2cfbb35d09b9
+Server stack trace:
+  at KRPC.SpaceCenter.FlightGlobalsExtensions.GetVesselById (System.Guid id) [0x0008a] in <d8566df5220a4070afa44bd2ecc53aa8>:0 
+  at KRPC.SpaceCenter.Services.AutoPilot.get_InternalVessel () [0x00000] in <d8566df5220a4070afa44bd2ecc53aa8>:0 
+  at KRPC.SpaceCenter.Services.AutoPilot.get_Error () [0x00084] in <d8566df5220a4070afa44bd2ecc53aa8>:0 
+  at KRPC.SpaceCenter.Services.AutoPilot.Wait () [0x00000] in <d8566df5220a4070afa44bd2ecc53aa8>:0 
+  at KRPC.Service.YieldException.CallUntyped () [0x00014] in <721f168820194101b819b3da6b33b716>:0 
+  at KRPC.Service.ProcedureCallContinuation+<Run>c__AnonStorey0.<>m__0 () [0x00000] in <721f168820194101b819b3da6b33b716>:0 
+  at KRPC.Service.Services.ExecuteCall (KRPC.Service.Scanner.ProcedureSignature procedure, System.Func`1[TResult] continuation) [0x00000] in <721f168820194101b819b3da6b33b716>:0 
+

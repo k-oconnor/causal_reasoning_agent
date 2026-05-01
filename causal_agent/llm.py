@@ -23,6 +23,26 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from itertools import cycle
+
+def _safe_parse_args(raw: str) -> dict:
+    """
+    Parse tool-call arguments JSON from the LLM.
+
+    If the model truncated the JSON (e.g. due to a token limit), we log a
+    warning and return an empty dict so the ToolRegistry can raise a clean
+    'missing argument' error that gets fed back to the model rather than
+    crashing the whole process.
+    """
+    if not raw or raw.strip() in ("", "{}"):
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logging.getLogger("causal_agent.llm").warning(
+            "Malformed tool-call arguments (truncated JSON?): %s — raw: %r",
+            exc, raw[:200],
+        )
+        return {}
 from typing import Any, Iterator, Mapping, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -195,7 +215,7 @@ class OpenAILLM(BaseLLM):
 
     def __init__(
         self,
-        model: str = "gpt-4o",
+        model: str = "gpt-5.4",
         api_key: str | None = None,
         **default_kwargs,
     ) -> None:
@@ -208,6 +228,18 @@ class OpenAILLM(BaseLLM):
         self._model = model
         self._defaults = default_kwargs
 
+    # Models ≥ gpt-4.5 / o-series require max_completion_tokens instead of
+    # max_tokens. Translate transparently so callers never need to know.
+    _COMPLETION_TOKENS_MODELS = ("gpt-5", "gpt-4.5", "o1", "o3", "o4")
+
+    def _normalize_params(self, params: dict) -> dict:
+        if "max_tokens" in params and any(
+            self._model.startswith(p) for p in self._COMPLETION_TOKENS_MODELS
+        ):
+            params = dict(params)
+            params["max_completion_tokens"] = params.pop("max_tokens")
+        return params
+
     def complete(self, prompt: str, system: str = "", **kwargs) -> str:
         self._log_request(prompt, system)
         messages = []
@@ -215,7 +247,7 @@ class OpenAILLM(BaseLLM):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        params = {**self._defaults, **kwargs}
+        params = self._normalize_params({**self._defaults, **kwargs})
         resp = self._client.chat.completions.create(
             model=self._model, messages=messages, **params,
         )
@@ -232,7 +264,7 @@ class OpenAILLM(BaseLLM):
             all_messages.append({"role": "system", "content": system})
         all_messages.extend(messages)
 
-        params = {**self._defaults, **kwargs}
+        params = self._normalize_params({**self._defaults, **kwargs})
         resp = self._client.chat.completions.create(
             model=self._model,
             messages=all_messages,
@@ -243,7 +275,7 @@ class OpenAILLM(BaseLLM):
         if msg.tool_calls:
             tcs = [
                 ToolCall(id=tc.id, name=tc.function.name,
-                         arguments=json.loads(tc.function.arguments))
+                         arguments=_safe_parse_args(tc.function.arguments))
                 for tc in msg.tool_calls
             ]
             self._log_tool_calls(tcs)
@@ -267,7 +299,7 @@ class OpenAILLM(BaseLLM):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        params = {**self._defaults, **kwargs}
+        params = self._normalize_params({**self._defaults, **kwargs})
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
@@ -631,7 +663,7 @@ class DeepSeekLLM(BaseLLM):
         if msg.tool_calls:
             tcs = [
                 ToolCall(id=tc.id, name=tc.function.name,
-                         arguments=json.loads(tc.function.arguments))
+                         arguments=_safe_parse_args(tc.function.arguments))
                 for tc in msg.tool_calls
             ]
             self._log_tool_calls(tcs)

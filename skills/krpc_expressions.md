@@ -7,7 +7,12 @@ kRPC lets you build **expressions** that are evaluated on the game server, not i
 - Creating **events** that block until a condition is true — without a polling loop in Python
 - Composing conditions from live game data with no per-tick RPC round-trips
 
-The two main classes are `krpc.expression.Expression` and `krpc.expression.Type`.
+The two main classes are accessed via `conn.krpc.Expression` and `conn.krpc.Type` (not `krpc.expression.*`):
+
+```python
+expr  = conn.krpc.Expression
+type_ = conn.krpc.Type
+```
 
 ---
 
@@ -152,3 +157,56 @@ result = expr.invoke(double_fn, {"x": expr.constant_double(5.0)})
 | Simple condition, low latency requirements | `wait_until` with a stream |
 
 For most flight control loops, streams are the right tool. Expressions shine for one-shot "wait until X happens" gates — coasting to apoapsis, waiting for SOI change, waiting for a stage to deplete — where a polling loop would waste CPU.
+
+---
+
+## Practical Patterns for a Mun Mission
+
+### Wait for apoapsis altitude to exceed threshold
+
+```python
+expr  = conn.krpc.Expression
+type_ = conn.krpc.Type
+
+apo_call = conn.get_call(getattr, vessel.orbit, "apoapsis_altitude")
+condition = expr.greater_than(
+    expr.call(apo_call),
+    expr.constant_double(80_000.0)
+)
+event = conn.add_event(condition)
+with event.condition:
+    event.wait()
+```
+
+### Wait for SOI to change to Mun
+
+Use a polling stream here — SOI changes are rare and a 0.5 s poll is fine:
+
+```python
+import time, math
+
+while True:
+    t = vessel.orbit.time_to_soi_change
+    if not math.isnan(t) and t < 2.0:
+        break
+    if not math.isnan(t) and t > 60:
+        conn.space_center.warp_to(conn.space_center.ut + t - 30)
+    time.sleep(0.5)
+
+while vessel.orbit.body.name != "Mun":
+    time.sleep(0.1)
+```
+
+### Coasting to apoapsis during ascent
+
+Use a stream and a tight poll rather than an expression event — you need to
+keep writing telemetry during the coast, so a blocking event is not suitable:
+
+```python
+apo_stream = conn.add_stream(getattr, vessel.orbit, "apoapsis_altitude")
+target_ap  = 80_000
+
+while apo_stream() < target_ap:
+    write_telemetry(tf, vessel, sc, launch_ut, "ASCENT_COAST")
+    time.sleep(0.5)
+```

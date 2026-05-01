@@ -101,10 +101,9 @@ class ResearchPlanner:
     skill_docs     : Optional list of skill document strings to prepend to the
                      first user message as reference material.
     max_iterations  : Hard cap on ReAct loop iterations (default 20).
-    max_tokens      : Token budget for each LLM call. Increase this for
-                      final synthesis steps that produce long manifests or
-                      scripts. Defaults to 4096 — enough for a full rocket
-                      manifest + flight script in one pass.
+    max_tokens      : Per-call **completion** budget (assistant output only).
+                      Defaults to 16384. This does NOT limit how large the
+                      conversation + tool results can grow on the input side.
     verbose         : Print each tool call and result to stdout.
     """
 
@@ -116,7 +115,7 @@ class ResearchPlanner:
         skill_docs: list[str] | None = None,
         memory: MemoryStore | None = None,
         max_iterations: int = 20,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
         verbose: bool = True,
     ) -> None:
         self._llm = llm
@@ -209,6 +208,14 @@ class ResearchPlanner:
                 content=plan_text,
                 metadata={"iterations": iterations, "tool_calls": len(tool_call_log)},
             )
+            # If the agent skipped human_notify/plan_complete and just wrote a
+            # final text response, push it to the UI via human_notify so it
+            # doesn't silently disappear into the terminal.
+            used_plan_complete = any(
+                entry["call"]["name"] == "plan_complete" for entry in tool_call_log
+            )
+            if not used_plan_complete and plan_text:
+                self._push_to_ui(plan_text)
             return PlanningResult(
                 plan=plan_text,
                 iterations=iterations,
@@ -346,6 +353,18 @@ class ResearchPlanner:
             if entry.get("call", {}).get("name") == "human_notify":
                 return entry["call"].get("arguments", {}).get("message", "")
         return ""
+
+    def _push_to_ui(self, text: str) -> None:
+        """
+        If human_notify is registered, call it with the plan text so the UI
+        receives content even when the agent wrote a plain final response
+        instead of using human_notify + plan_complete explicitly.
+        """
+        try:
+            self._registry.dispatch_by_name("human_notify", {"message": text})
+            log.info("_push_to_ui: forwarded final response to UI via human_notify")
+        except Exception:
+            log.debug("_push_to_ui: human_notify not available, skipping", exc_info=True)
 
     def _mem_write(
         self,
