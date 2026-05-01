@@ -1,0 +1,16 @@
+{
+  "code_length": 4,
+  "duplicates_allowed": false,
+  "episodes": 5,
+  "game": "mastermind",
+  "games_solved": 0,
+  "invalid_moves": 0,
+  "max_attempts": 10,
+  "mean_guesses": 10,
+  "mean_guesses_solved": 0,
+  "mean_remaining_candidates": 1,
+  "median_guesses": 10,
+  "num_colors": 6,
+  "policy": "random",
+  "solve_rate": 0.0
+}

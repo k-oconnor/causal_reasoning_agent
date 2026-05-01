@@ -1,0 +1,13 @@
+{
+  "best_max_tile": 256,
+  "best_score": 3676,
+  "episodes": 5,
+  "game": "2048",
+  "invalid_moves": 0,
+  "mean_max_tile": 230.4,
+  "mean_score": 3056.8,
+  "mean_turns": 257.8,
+  "median_score": 3508,
+  "policy": "greedy",
+  "terminal_episodes": 5
+}
