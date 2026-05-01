@@ -136,6 +136,60 @@ class GameThoughtSessionTests(unittest.TestCase):
             self.assertIn("board_before", records[0])
             self.assertIn("board_after", records[0])
 
+    def test_can_extend_max_turns_after_session_stops(self) -> None:
+        session = GameThoughtSession(
+            GameRunConfig(game="2048", seed=7, max_turns=1),
+            MockLLM([
+                '{"intent": "move down", "action_type": "slide", '
+                '"parameters": {"direction": "down"}, "public_rationale": "Merge."}'
+            ]),
+        )
+
+        first = session.step()
+        self.assertIsNotNone(first)
+        self.assertTrue(session.snapshot()["stopped"])
+        self.assertIsNone(session.step())
+
+        session.update_max_turns(2)
+
+        self.assertFalse(session.snapshot()["stopped"])
+        self.assertIsNotNone(session.step())
+        self.assertEqual(session.snapshot()["turn"], 2)
+
+    def test_resume_from_jsonl_records_reconstructs_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            session = GameThoughtSession(
+                GameRunConfig(game="2048", seed=5, max_turns=3, log_dir=tmp),
+                MockLLM([
+                    '{"intent": "move left", "action_type": "slide", '
+                    '"parameters": {"direction": "left"}, "public_rationale": "Merge."}',
+                    '{"intent": "move up", "action_type": "slide", '
+                    '"parameters": {"direction": "up"}, "public_rationale": "Open space."}',
+                ]),
+            )
+            self.assertIsNotNone(session.step())
+            self.assertIsNotNone(session.step())
+
+            records = [
+                json.loads(line)
+                for line in Path(session.snapshot()["log_path"]).read_text().splitlines()
+                if line.strip()
+            ]
+            resumed = GameThoughtSession(
+                GameRunConfig(game="2048", seed=5, max_turns=3),
+                MockLLM([
+                    '{"intent": "move right", "action_type": "slide", '
+                    '"parameters": {"direction": "right"}, "public_rationale": "Shift."}',
+                ]),
+            )
+
+            resumed.resume_from_records(records)
+
+            self.assertEqual(resumed.snapshot()["turn"], 2)
+            self.assertEqual(resumed.snapshot()["state"]["board"], session.snapshot()["state"]["board"])
+            self.assertEqual(len(resumed.snapshot()["history"]), 2)
+            self.assertIsNotNone(resumed.step())
+
     def _assert_no_private_trace_keys(self, value) -> None:
         private_keys = {"prompt", "raw", "messages", "raw_output", "raw_response"}
         if isinstance(value, dict):

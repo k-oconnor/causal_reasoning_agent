@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--deepseek-key", default=None)
-    parser.add_argument("--deepseek-model", default="deepseek-chat")
+    parser.add_argument("--deepseek-model", default="deepseek-v4-flash")
     parser.add_argument(
         "--log-dir",
         default=None,

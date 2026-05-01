@@ -76,7 +76,9 @@ def run_tool_loop(
                 messages=loop_messages,
             )
 
-        loop_messages.append(assistant_tool_message(response.tool_calls))
+        loop_messages.append(
+            response.assistant_message or assistant_tool_message(response.tool_calls)
+        )
 
         for tc in response.tool_calls:
             if on_tool_call is not None:

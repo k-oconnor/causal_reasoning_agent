@@ -6,7 +6,7 @@ import copy
 import json
 import math
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
@@ -170,6 +170,7 @@ class GameThoughtSession:
         return {
             "game": self.game,
             "seed": self.config.seed,
+            "max_turns": self.config.max_turns,
             "turn": self.turn,
             "terminal": self.env.is_terminal,
             "stopped": self.turn >= self.config.max_turns,
@@ -180,6 +181,72 @@ class GameThoughtSession:
             "state": self._safe_state(),
             "history": [trace.to_dict() for trace in self.history],
         }
+
+    def update_max_turns(self, max_turns: int) -> None:
+        """Update the turn cap for the existing session."""
+        if max_turns < 1:
+            raise ValueError("max_turns must be at least 1.")
+        self.config = replace(self.config, max_turns=max_turns)
+
+    def resume_from_records(self, records: Sequence[dict[str, Any]]) -> None:
+        """Replay logged actions to restore a session without calling the LLM."""
+        for record in records:
+            action = _action_from_log_record(record, self.game, self.agent_id)
+            if action is None:
+                continue
+
+            turn = int(record.get("turn", self.turn))
+            obs = self.env.observe(self.agent_id)
+            state_before = self._safe_state(obs)
+            legal_options = copy.deepcopy(record.get("legal_options") or self._legal_options())
+            action_analysis = copy.deepcopy(record.get("action_analysis") or {})
+            if not action_analysis:
+                action_analysis = self._action_analysis(action)
+
+            feedback = self.env.step(self.agent_id, action)
+            state_after = self._safe_state()
+            if "score_delta" not in action_analysis and "candidate_count_after" not in action_analysis:
+                action_analysis.update(self._after_action_analysis(state_before, state_after, action))
+
+            planner_trace = copy.deepcopy(record.get("planner_trace") or {
+                "decision": {
+                    "intent": record.get("intent", ""),
+                    "public_rationale": record.get("rationale", ""),
+                },
+                "tool_calls": [],
+                "preview_notes": [],
+                "intervention_notes": [],
+                "parse_errors": [],
+            })
+            trace = TurnTrace(
+                turn=turn,
+                game=self.game,
+                observation=str(record.get("observation", obs.get("content", ""))),
+                state_before=state_before,
+                legal_options=legal_options,
+                planner_trace=planner_trace,
+                action=_action_to_dict(action),
+                action_analysis=action_analysis,
+                feedback=_feedback_from_log_record(record, feedback),
+                state_after=state_after,
+                terminal=bool(record.get("terminal", self.env.is_terminal)),
+            )
+            self.history.append(trace)
+            self.turn = max(self.turn, turn + 1)
+
+            facts = obs.get("facts", {})
+            if facts:
+                self.kripke = self.kripke.update_with_facts(facts)
+            feedback_facts = feedback.get("facts", {})
+            if feedback_facts:
+                self.kripke = self.kripke.update_with_facts(feedback_facts)
+            self.memory.add(MemoryEntry(
+                turn=turn,
+                kind="resumed",
+                source="log",
+                content=str(record.get("feedback", feedback.get("content", ""))),
+                metadata={"action": _action_to_dict(action), "state": state_after},
+            ))
 
     def step(self) -> dict[str, Any] | None:
         """Advance one agent decision and return its trace."""
@@ -409,6 +476,8 @@ class GameThoughtSession:
             f"episode_{self.config.episode:04d}_llm_seed_{self.config.seed}.jsonl"
         )
         path = log_dir / filename
+        if path.exists() and path.stat().st_size > 0:
+            path = _unique_log_path(path)
         path.write_text("")
         return path
 
@@ -496,6 +565,59 @@ def _action_to_dict(action: GameAction) -> dict[str, Any]:
         "payload": copy.deepcopy(action.payload),
         "agent_id": action.agent_id,
     }
+
+
+def _action_from_log_record(
+    record: dict[str, Any],
+    game: str,
+    agent_id: str,
+) -> GameAction | None:
+    action = record.get("action")
+    if isinstance(action, dict):
+        action_type = str(action.get("action_type") or ("guess" if game == "mastermind" else "slide"))
+        payload = copy.deepcopy(action.get("payload") or {})
+        return GameAction(action_type, payload, str(action.get("agent_id", agent_id)))
+
+    if game == "2048":
+        direction = record.get("action_direction") or record.get("direction")
+        if direction is None and isinstance(action, str):
+            direction = action
+        if direction:
+            return GameAction("slide", {"direction": str(direction)}, agent_id)
+        return None
+
+    guess = record.get("guess")
+    if guess is None and isinstance(action, list):
+        guess = action
+    if guess is not None:
+        return GameAction("guess", {"code": list(guess)}, agent_id)
+    return None
+
+
+def _feedback_from_log_record(record: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    event = copy.deepcopy(record.get("feedback_event") or {})
+    if not event:
+        event = {
+            "kind": str(fallback.get("kind", "")),
+            "content": str(record.get("feedback", fallback.get("content", ""))),
+            "reward": float(fallback.get("reward", 0.0)),
+            "terminal": bool(record.get("terminal", fallback.get("terminal", False))),
+        }
+    event.setdefault("kind", str(fallback.get("kind", "")))
+    event.setdefault("content", str(record.get("feedback", fallback.get("content", ""))))
+    event.setdefault("reward", float(fallback.get("reward", 0.0)))
+    event.setdefault("terminal", bool(record.get("terminal", fallback.get("terminal", False))))
+    return event
+
+
+def _unique_log_path(path: Path) -> Path:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    candidate = path.with_name(f"{path.stem}_{stamp}{path.suffix}")
+    counter = 1
+    while candidate.exists():
+        candidate = path.with_name(f"{path.stem}_{stamp}_{counter}{path.suffix}")
+        counter += 1
+    return candidate
 
 
 def _mastermind_candidate_count(

@@ -6,6 +6,7 @@ import json
 import uuid
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, Optional
 
 from causal_agent.game_trace import GameRunConfig, GameThoughtSession, mock_responses_for_game
@@ -38,17 +39,46 @@ button {
   border-radius: 6px;
   padding: 7px 10px;
   cursor: pointer;
+  min-height: 34px;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease,
+    box-shadow .16s ease, transform .08s ease;
 }
-button:hover { background: #eef2ea; }
+button:hover:not(:disabled) { background: #eef2ea; }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
 button.primary {
   background: #1f6f5b;
   border-color: #1f6f5b;
   color: #fff;
 }
+button.primary:hover:not(:disabled) { background: #185947; }
 button.warn {
   background: #b4553e;
   border-color: #b4553e;
   color: #fff;
+}
+button.warn:hover:not(:disabled) { background: #933f2b; }
+button.run-active {
+  background: #254f86;
+  border-color: #254f86;
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 79, 134, .18);
+}
+button.is-working {
+  background: #26463d;
+  border-color: #26463d;
+  color: #fff;
+}
+button.flash-ok {
+  animation: flash-ok .72s ease;
+}
+@keyframes flash-ok {
+  0% { box-shadow: 0 0 0 0 rgba(31, 111, 91, .38); }
+  70% { box-shadow: 0 0 0 7px rgba(31, 111, 91, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 111, 91, 0); }
 }
 input, select {
   border: 1px solid #b8beb1;
@@ -96,6 +126,52 @@ h1 {
   padding: 6px 10px;
   font-size: 12px;
   white-space: nowrap;
+}
+.status {
+  border: 1px solid #c9cdc4;
+  background: #f7f8f5;
+  color: #4d554b;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8a9285;
+}
+.status.ready .status-dot { background: #1f6f5b; }
+.status.running {
+  border-color: #a9bed8;
+  background: #f0f6ff;
+  color: #254f86;
+}
+.status.running .status-dot {
+  background: #2b6cb0;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+.status.done {
+  border-color: #b8d2c7;
+  background: #eff8f4;
+  color: #1f6f5b;
+}
+.status.done .status-dot { background: #1f6f5b; }
+.status.error {
+  border-color: #e0b1a6;
+  background: #fff2ee;
+  color: #9f3f2d;
+  max-width: min(580px, 100%);
+  white-space: normal;
+}
+.status.error .status-dot { background: #b4553e; }
+@keyframes pulse-dot {
+  0%, 100% { opacity: .45; transform: scale(.88); }
+  50% { opacity: 1; transform: scale(1.16); }
 }
 main {
   display: grid;
@@ -285,7 +361,12 @@ summary {
       </select>
     </label>
     <label>Seed <input id="seed" type="number" value="7"></label>
-    <label>Turns <input id="max-turns" type="number" value="100" min="1"></label>
+    <label>Turns <input id="max-turns" type="number" value="100" min="1" oninput="scheduleSessionConfigSync()" onchange="syncSessionConfig()"></label>
+    <label>Run
+      <select id="resume-log" onchange="handleResumeChoice()">
+        <option value="">New run</option>
+      </select>
+    </label>
     <span class="controls" id="mastermind-controls">
       <label>Colors <input id="num-colors" type="number" value="6" min="2" max="10"></label>
       <label>Length <input id="code-length" type="number" value="4" min="1" max="6"></label>
@@ -297,12 +378,13 @@ summary {
         </select>
       </label>
     </span>
-    <button onclick="resetSession()">Reset</button>
-    <button class="primary" onclick="stepSession()">Step</button>
-    <button onclick="autoRun()">Auto-run</button>
-    <button class="warn" onclick="pauseRun()">Pause</button>
+    <button id="reset-btn" onclick="resetSession()">Reset</button>
+    <button id="step-btn" class="primary" onclick="stepSession()">Step</button>
+    <button id="autorun-btn" onclick="autoRun()">Auto-run</button>
+    <button id="pause-btn" class="warn" onclick="pauseRun()">Pause</button>
   </div>
   <div class="spacer"></div>
+  <div class="status" id="run-status" aria-live="polite"><span class="status-dot"></span><span>Starting</span></div>
   <div class="badge" id="model">No session</div>
 </header>
 
@@ -337,6 +419,10 @@ let sessionId = null;
 let current = null;
 let autoRunning = false;
 let isStepping = false;
+let isResetting = false;
+let isSyncingConfig = false;
+let configSyncTimer = null;
+let lastError = "";
 
 function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -347,7 +433,8 @@ function selectedColors() {
 }
 function payload() {
   const game = document.getElementById("game").value;
-  return {
+  const resumePath = document.getElementById("resume-log").value;
+  const data = {
     game,
     seed: Number(document.getElementById("seed").value || 7),
     max_turns: Number(document.getElementById("max-turns").value || 100),
@@ -356,32 +443,177 @@ function payload() {
     max_attempts: Number(document.getElementById("max-attempts").value || 10),
     duplicates_allowed: document.getElementById("duplicates").value === "true"
   };
+  if (resumePath) data.resume_log_path = resumePath;
+  return data;
 }
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     headers: {"Content-Type": "application/json"},
     ...opts
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const text = await res.text();
+  if (!res.ok) {
+    let message = text;
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed.detail || text;
+    } catch (_) {}
+    throw new Error(message);
+  }
+  return JSON.parse(text);
 }
-async function resetSession() {
-  pauseRun();
-  current = await api("/api/sessions", {method: "POST", body: JSON.stringify(payload())});
-  sessionId = current.session_id;
-  render();
+function control(id) {
+  return document.getElementById(id);
+}
+function setStatus(text, kind = "ready") {
+  const el = document.getElementById("run-status");
+  el.className = `status ${kind}`;
+  el.innerHTML = `<span class="status-dot"></span><span>${esc(text)}</span>`;
+}
+function showError(error) {
+  lastError = error?.message || String(error || "Unknown error");
+  autoRunning = false;
+  setStatus(lastError, "error");
+  syncControls();
+}
+function flashButton(id) {
+  const btn = control(id);
+  if (!btn) return;
+  btn.classList.remove("flash-ok");
+  void btn.offsetWidth;
+  btn.classList.add("flash-ok");
+}
+function syncControls() {
+  const busy = isStepping || isResetting || isSyncingConfig;
+  const terminal = Boolean(current?.terminal || current?.stopped);
+  control("reset-btn").disabled = busy;
+  control("step-btn").disabled = busy || terminal;
+  control("autorun-btn").disabled = busy || autoRunning || terminal;
+  control("pause-btn").disabled = !autoRunning;
+  control("step-btn").classList.toggle("is-working", isStepping && !autoRunning);
+  control("autorun-btn").classList.toggle("run-active", autoRunning);
+  control("autorun-btn").classList.toggle("is-working", autoRunning);
+}
+function scheduleSessionConfigSync() {
+  if (!sessionId || !current) return;
+  clearTimeout(configSyncTimer);
+  configSyncTimer = setTimeout(() => syncSessionConfig(), 550);
+}
+async function loadResumeLogs() {
+  const game = document.getElementById("game").value;
+  const select = document.getElementById("resume-log");
+  const selected = select.value;
+  select.innerHTML = `<option value="">New run</option>`;
+  try {
+    const data = await api(`/api/logs?game=${encodeURIComponent(game)}`);
+    for (const item of data.logs || []) {
+      const option = document.createElement("option");
+      option.value = item.path;
+      option.dataset.turns = item.turns;
+      option.dataset.seed = item.seed;
+      option.textContent = `${item.label} (${item.turns} turns, seed ${item.seed})`;
+      select.appendChild(option);
+    }
+    if ([...select.options].some(option => option.value === selected)) {
+      select.value = selected;
+    }
+  } catch (error) {
+    showError(error);
+  }
+}
+async function handleResumeChoice() {
+  const select = document.getElementById("resume-log");
+  const option = select.selectedOptions[0];
+  if (option?.value) {
+    const turns = Number(option.dataset.turns || 0);
+    const currentLimit = Number(document.getElementById("max-turns").value || 100);
+    if (turns >= currentLimit) {
+      document.getElementById("max-turns").value = turns + 100;
+    }
+    if (option.dataset.seed) {
+      document.getElementById("seed").value = option.dataset.seed;
+    }
+  }
+  await resetSession();
+}
+async function syncSessionConfig(options = {}) {
+  clearTimeout(configSyncTimer);
+  if (!sessionId || !current) return current;
+  const maxTurns = Number(document.getElementById("max-turns").value || current.max_turns || 100);
+  if (maxTurns === current.max_turns) return current;
+  isSyncingConfig = true;
+  lastError = "";
+  if (!options.silent) setStatus(`Updating turn limit to ${maxTurns}`, "running");
+  syncControls();
+  try {
+    current = await api(`/api/sessions/${sessionId}/config`, {
+      method: "PATCH",
+      body: JSON.stringify({max_turns: maxTurns})
+    });
+    render();
+    if (!options.silent) setStatus(`Turn limit is now ${current.max_turns}`, "done");
+    return current;
+  } catch (error) {
+    showError(error);
+    return null;
+  } finally {
+    isSyncingConfig = false;
+    syncControls();
+  }
+}
+async function resetSession(options = {}) {
+  const shouldPause = options.pause !== false;
+  if (shouldPause) pauseRun({silent: true});
+  isResetting = true;
+  lastError = "";
+  setStatus(document.getElementById("resume-log").value ? "Loading previous run" : "Starting a fresh session", "running");
+  syncControls();
+  try {
+    current = await api("/api/sessions", {method: "POST", body: JSON.stringify(payload())});
+    sessionId = current.session_id;
+    render();
+    setStatus(current.turn ? `Resumed at turn ${current.turn}` : "Ready", "ready");
+    if (options.flash !== false) flashButton("reset-btn");
+    return current;
+  } catch (error) {
+    showError(error);
+    return null;
+  } finally {
+    isResetting = false;
+    syncControls();
+  }
 }
 async function stepSession() {
   if (isStepping) return current;
   isStepping = true;
-  if (!sessionId) await resetSession();
+  lastError = "";
+  setStatus(autoRunning ? "Auto-run is thinking through the next move" : "Thinking through the next move", "running");
+  syncControls();
   try {
+    if (!sessionId) {
+      const created = await resetSession({pause: false, flash: false});
+      if (!created) return null;
+      setStatus(autoRunning ? "Auto-run is thinking through the next move" : "Thinking through the next move", "running");
+    } else {
+      const synced = await syncSessionConfig({silent: true});
+      if (!synced) return null;
+    }
     current = await api(`/api/sessions/${sessionId}/step`, {method: "POST"});
     render();
-    if (current.terminal || current.stopped) pauseRun();
+    if (current.terminal || current.stopped) {
+      autoRunning = false;
+      setStatus("Run complete", "done");
+    } else {
+      setStatus(autoRunning ? "Auto-run is active" : "Move complete", "done");
+    }
+    flashButton("step-btn");
     return current;
+  } catch (error) {
+    showError(error);
+    return null;
   } finally {
     isStepping = false;
+    syncControls();
   }
 }
 function sleep(ms) {
@@ -390,15 +622,28 @@ function sleep(ms) {
 async function autoRun() {
   if (autoRunning) return;
   autoRunning = true;
-  while (autoRunning) {
-    const state = await stepSession();
-    if (!state || state.terminal || state.stopped) break;
-    await sleep(900);
+  lastError = "";
+  setStatus("Auto-run started", "running");
+  syncControls();
+  try {
+    while (autoRunning) {
+      const state = await stepSession();
+      if (!autoRunning || !state || state.terminal || state.stopped) break;
+      await sleep(900);
+    }
+  } finally {
+    const endedAtTerminal = Boolean(current?.terminal || current?.stopped);
+    autoRunning = false;
+    if (!lastError && endedAtTerminal) setStatus("Run complete", "done");
+    else if (!lastError) setStatus("Paused", "ready");
+    syncControls();
   }
-  autoRunning = false;
 }
-function pauseRun() {
+function pauseRun(options = {}) {
+  const wasRunning = autoRunning;
   autoRunning = false;
+  if (wasRunning && !options.silent) setStatus("Paused", "ready");
+  syncControls();
 }
 function toggleGameControls() {
   document.getElementById("mastermind-controls").style.display =
@@ -406,6 +651,7 @@ function toggleGameControls() {
 }
 async function handleGameChange() {
   toggleGameControls();
+  await loadResumeLogs();
   await resetSession();
 }
 function applyDefaults() {
@@ -425,6 +671,7 @@ function render() {
   else renderMastermind(current.state);
   renderCurrentAct();
   renderTimeline(current.history || []);
+  syncControls();
 }
 function renderStats(items) {
   return `<div class="stats">${items.map(([k,v]) =>
@@ -499,13 +746,13 @@ function renderTimeline(history) {
       <div class="kv"><span>observation</span><strong>${esc(turn.observation || "")}</strong></div>
       <div class="rationale">${esc(decision.public_rationale || "")}</div>
       <div class="kv"><span>feedback</span><strong>${esc(turn.feedback?.content || "")}</strong></div>
-      <details open><summary>Options</summary><pre>${esc(pretty(turn.legal_options || []))}</pre></details>
-      <details open><summary>Action analysis</summary><pre>${esc(pretty(turn.action_analysis || {}))}</pre></details>
-      <details open><summary>Safe planner trace</summary><pre>${esc(pretty(turn.planner_trace || {}))}</pre></details>
-      ${tools.length ? `<details open><summary>Tool calls</summary><pre>${esc(pretty(tools))}</pre></details>` : ""}
-      ${(turn.planner_trace?.preview_notes || []).length ? `<details open><summary>Planner previews</summary><pre>${esc(pretty(turn.planner_trace.preview_notes))}</pre></details>` : ""}
-      ${(turn.planner_trace?.intervention_notes || []).length ? `<details open><summary>Interventions</summary><pre>${esc(pretty(turn.planner_trace.intervention_notes))}</pre></details>` : ""}
-      ${(turn.planner_trace?.parse_errors || []).length ? `<details open><summary>Parse and fallback text</summary><pre>${esc(pretty({
+      <details><summary>Options</summary><pre>${esc(pretty(turn.legal_options || []))}</pre></details>
+      <details><summary>Action analysis</summary><pre>${esc(pretty(turn.action_analysis || {}))}</pre></details>
+      <details><summary>Safe planner trace</summary><pre>${esc(pretty(turn.planner_trace || {}))}</pre></details>
+      ${tools.length ? `<details><summary>Tool calls</summary><pre>${esc(pretty(tools))}</pre></details>` : ""}
+      ${(turn.planner_trace?.preview_notes || []).length ? `<details><summary>Planner previews</summary><pre>${esc(pretty(turn.planner_trace.preview_notes))}</pre></details>` : ""}
+      ${(turn.planner_trace?.intervention_notes || []).length ? `<details><summary>Interventions</summary><pre>${esc(pretty(turn.planner_trace.intervention_notes))}</pre></details>` : ""}
+      ${(turn.planner_trace?.parse_errors || []).length ? `<details><summary>Parse and fallback text</summary><pre>${esc(pretty({
         parse_errors: turn.planner_trace.parse_errors,
         fallback: turn.planner_trace.fallback,
         fallback_reason: turn.planner_trace.fallback_reason || ""
@@ -536,9 +783,13 @@ function actionLabel(action) {
   return action.action_type;
 }
 
-applyDefaults();
-toggleGameControls();
-resetSession();
+async function init() {
+  applyDefaults();
+  toggleGameControls();
+  await loadResumeLogs();
+  await resetSession();
+}
+init();
 </script>
 </body>
 </html>
@@ -562,10 +813,25 @@ def create_game_ui_app(
     sessions: dict[str, GameThoughtSession] = {}
 
     def _build_session(payload: dict[str, Any] | None) -> tuple[str, GameThoughtSession]:
+        payload_data = dict(payload or {})
+        resume_log_path = payload_data.pop("resume_log_path", "")
+        resume_records: list[dict[str, Any]] = []
+        resolved_resume_path: Path | None = None
+
         data = _config_to_payload(default_config)
-        data.update(payload or {})
+        if resume_log_path:
+            resolved_resume_path = _resolve_log_path(str(resume_log_path))
+            resume_records = _read_log_records(resolved_resume_path)
+            if not resume_records:
+                raise ValueError(f"Cannot resume from empty log: {resume_log_path}")
+            data.update(_config_from_log_records(resume_records, resolved_resume_path))
+            data["log_dir"] = None
+            data["log_filename"] = None
+        data.update(payload_data)
+        if resume_records:
+            data["max_turns"] = max(int(data.get("max_turns", 100)), len(resume_records) + 100)
         config = GameRunConfig.from_dict(data)
-        if config.log_dir is None and log_dir_factory is not None:
+        if not resume_records and config.log_dir is None and log_dir_factory is not None:
             config = replace(config, log_dir=log_dir_factory(config))
         llm = (
             llm_factory(config)
@@ -573,6 +839,9 @@ def create_game_ui_app(
             else MockLLM(mock_responses_for_game(config.game))
         )
         session = GameThoughtSession(config, llm, model_label=repr(llm))
+        if resume_records:
+            session.resume_from_records(resume_records)
+            session.log_path = resolved_resume_path
         session_id = uuid.uuid4().hex[:10]
         sessions[session_id] = session
         return session_id, session
@@ -585,6 +854,10 @@ def create_game_ui_app(
     @app.get("/")
     async def index():
         return HTMLResponse(html)
+
+    @app.get("/api/logs")
+    async def list_logs(game: str = ""):
+        return {"logs": _available_logs(game)}
 
     @app.post("/api/sessions")
     async def create_session(payload: Any = Body(default=None)):
@@ -601,12 +874,28 @@ def create_game_ui_app(
             raise HTTPException(status_code=404, detail="Unknown session.")
         return {"session_id": session_id, **session.snapshot()}
 
+    @app.patch("/api/sessions/{session_id}/config")
+    async def update_session_config(session_id: str, payload: Any = Body(default=None)):
+        session = sessions.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Unknown session.")
+        try:
+            data = dict(payload or {})
+            if "max_turns" in data:
+                session.update_max_turns(int(data["max_turns"]))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"session_id": session_id, **session.snapshot()}
+
     @app.post("/api/sessions/{session_id}/step")
     async def step_session(session_id: str):
         session = sessions.get(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Unknown session.")
-        session.step()
+        try:
+            session.step()
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
         return {"session_id": session_id, **session.snapshot()}
 
     return app
@@ -630,3 +919,93 @@ def _config_to_payload(config: GameRunConfig | None) -> dict[str, Any]:
         "log_filename": config.log_filename,
         "episode": config.episode,
     }
+
+
+def _available_logs(game: str) -> list[dict[str, Any]]:
+    root = Path("logs") / "evaluations"
+    game_dir = root / str(game or "")
+    search_root = game_dir if game_dir.exists() else root
+    logs: list[dict[str, Any]] = []
+    for path in search_root.rglob("*.jsonl"):
+        records = _read_log_records(path, tolerate_errors=True)
+        if not records:
+            continue
+        config = _config_from_log_records(records, path)
+        if game and config.get("game") != str(game):
+            continue
+        stat = path.stat()
+        turns = max(int(record.get("turn", index)) for index, record in enumerate(records)) + 1
+        logs.append({
+            "path": str(path),
+            "label": str(path.relative_to(root)),
+            "game": config.get("game", ""),
+            "seed": config.get("seed", ""),
+            "turns": turns,
+            "terminal": bool(records[-1].get("terminal", False)),
+            "updated": stat.st_mtime,
+        })
+    logs.sort(key=lambda item: item["updated"], reverse=True)
+    return logs
+
+
+def _resolve_log_path(raw_path: str) -> Path:
+    root = (Path("logs") / "evaluations").resolve()
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = (Path.cwd() / path).resolve()
+    else:
+        path = path.resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Resume log must be inside logs/evaluations.") from exc
+    if path.suffix != ".jsonl":
+        raise ValueError("Resume log must be a .jsonl file.")
+    if not path.exists():
+        raise ValueError(f"Resume log does not exist: {raw_path}")
+    return path
+
+
+def _read_log_records(path: Path, *, tolerate_errors: bool = False) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    try:
+        with path.open() as handle:
+            for line in handle:
+                if line.strip():
+                    records.append(json.loads(line))
+    except Exception:
+        if tolerate_errors:
+            return []
+        raise
+    return records
+
+
+def _config_from_log_records(records: list[dict[str, Any]], path: Path) -> dict[str, Any]:
+    first = records[0]
+    last = records[-1]
+    game = str(last.get("game") or first.get("game") or _infer_game_from_path(path))
+    data: dict[str, Any] = {
+        "game": game,
+        "seed": int(last.get("seed", first.get("seed", 7))),
+        "episode": int(last.get("episode", first.get("episode", 0))),
+    }
+    if game == "mastermind":
+        data.update({
+            "colors": last.get("colors", first.get("colors", [])),
+            "code_length": int(last.get("code_length", first.get("code_length", 4))),
+            "max_attempts": int(last.get("max_attempts", first.get("max_attempts", 10))),
+            "duplicates_allowed": bool(last.get("duplicates_allowed", first.get("duplicates_allowed", True))),
+            "secret": last.get("secret", first.get("secret")),
+        })
+    else:
+        board = last.get("board_after") or first.get("board_before") or []
+        if board:
+            data["size"] = len(board)
+    return data
+
+
+def _infer_game_from_path(path: Path) -> str:
+    parts = set(path.parts)
+    if "mastermind" in parts:
+        return "mastermind"
+    return "2048"

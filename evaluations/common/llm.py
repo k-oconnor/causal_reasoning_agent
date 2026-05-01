@@ -24,7 +24,7 @@ def add_llm_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--gemini-key", default=None)
     parser.add_argument("--gemini-model", default="gemini-2.0-flash")
     parser.add_argument("--deepseek-key", default=None)
-    parser.add_argument("--deepseek-model", default="deepseek-chat")
+    parser.add_argument("--deepseek-model", default="deepseek-v4-flash")
 
 
 def build_llm(args: argparse.Namespace, mock_responses: Sequence[str]):
@@ -42,4 +42,3 @@ def build_llm(args: argparse.Namespace, mock_responses: Sequence[str]):
     if args.model == "deepseek":
         return DeepSeekLLM(model=args.deepseek_model, api_key=args.deepseek_key, temperature=args.temperature)
     return MockLLM(list(mock_responses))
-
