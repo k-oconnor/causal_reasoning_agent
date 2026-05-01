@@ -30,14 +30,15 @@ from causal_agent import (
     FeedbackProcessor,
     MemoryEntry,
     MemoryStore,
-    Planner,
 )
 from causal_agent.acting import GameAction
 from evaluations.common import (
     TraceLogger,
     add_llm_args,
+    build_planner,
     build_llm,
     dataclass_to_dict,
+    plan_action_with_retry,
     write_summary,
 )
 from games.mastermind import MastermindEnv
@@ -127,6 +128,27 @@ def choose_candidate(state: MastermindEvalState, rng: random.Random) -> Guess:
         if candidate not in guessed:
             return list(candidate)
     return choose_random(state, rng)
+
+
+def repair_repeated_llm_guess(
+    state: MastermindEvalState,
+    guess: Sequence[str],
+) -> tuple[Guess, str]:
+    remaining = consistent_candidates(state)
+    if not remaining:
+        return list(guess), ""
+
+    guess_tuple = tuple(guess)
+    if len(remaining) == 1 and guess_tuple != remaining[0]:
+        return list(remaining[0]), "only_remaining_candidate"
+
+    guessed = {tuple(record["guess"]) for record in state.history}
+    if guess_tuple in guessed:
+        for candidate in remaining:
+            if candidate not in guessed:
+                return list(candidate), "repeated_guess_replaced_with_candidate"
+
+    return list(guess), ""
 
 
 def choose_knuth(state: MastermindEvalState, rng: random.Random) -> Guess:
@@ -232,12 +254,13 @@ def run_episode(
         colors=colors,
         code_length=code_length,
         max_attempts=max_attempts,
+        duplicates_allowed=duplicates_allowed,
         secret=secret,
         agent_id="Agent",
     )
     all_codes = generate_all_codes(colors, code_length, duplicates_allowed)
     policy = POLICIES.get(policy_name)
-    planner = Planner(llm, simulate_before_plan=False) if policy_name == "llm" else None
+    planner = build_planner(env, llm, agent_id="Agent") if policy_name == "llm" else None
     actor = Actor()
     feedback_processor = FeedbackProcessor()
     memory = MemoryStore(max_short_term=80)
@@ -262,6 +285,8 @@ def run_episode(
             )
             before_remaining = len(consistent_candidates(state))
             plan = None
+            raw_guess: Guess | None = None
+            repair_reason = ""
 
             if policy_name == "llm":
                 event = feedback_processor.process(obs, turn)
@@ -283,7 +308,9 @@ def run_episode(
                 action_specs = env.action_specs("Agent")
                 if planner is None:
                     raise RuntimeError("LLM policy was selected without a planner.")
-                plan = planner.plan(
+                plan, action, invalid_count = plan_action_with_retry(
+                    planner=planner,
+                    actor=actor,
                     kripke=kripke,
                     memory=memory,
                     goal=(
@@ -292,9 +319,19 @@ def run_episode(
                     ),
                     agent_id="Agent",
                     action_specs=action_specs,
+                    turn=turn,
                 )
-                action = actor.act(plan, action_specs, "Agent")
+                invalid_moves += invalid_count
                 guess = list(action.payload["code"])
+                repaired_guess, repair_reason = repair_repeated_llm_guess(state, guess)
+                if repair_reason:
+                    raw_guess = guess
+                    guess = repaired_guess
+                    action = GameAction(
+                        action_type="guess",
+                        payload={"code": guess},
+                        agent_id="Agent",
+                    )
             else:
                 if policy is None:
                     raise ValueError(f"Unknown policy: {policy_name}")
@@ -306,6 +343,36 @@ def run_episode(
                 )
 
             feedback = env.step("Agent", action)
+            if feedback.get("kind") == "illegal_move" and policy_name == "llm":
+                invalid_moves += 1
+                action_specs = env.action_specs("Agent")
+                if action_specs and planner is not None:
+                    plan, action, invalid_count = plan_action_with_retry(
+                        planner=planner,
+                        actor=actor,
+                        kripke=kripke,
+                        memory=memory,
+                        goal=(
+                            "Solve Mastermind: infer the hidden code from exact and "
+                            "partial feedback while using as few guesses as possible."
+                        ),
+                        agent_id="Agent",
+                        action_specs=action_specs,
+                        turn=turn,
+                        error_context=feedback["content"],
+                    )
+                    invalid_moves += invalid_count
+                    guess = list(action.payload["code"])
+                    repaired_guess, repair_reason = repair_repeated_llm_guess(state, guess)
+                    if repair_reason:
+                        raw_guess = guess
+                        guess = repaired_guess
+                        action = GameAction(
+                            action_type="guess",
+                            payload={"code": guess},
+                            agent_id="Agent",
+                        )
+                    feedback = env.step("Agent", action)
             if feedback.get("kind") == "illegal_move":
                 invalid_moves += 1
             elif env.history:
@@ -330,7 +397,9 @@ def run_episode(
                 "max_attempts": max_attempts,
                 "duplicates_allowed": duplicates_allowed,
                 "secret": secret,
+                "raw_guess": raw_guess or guess,
                 "guess": guess,
+                "repair_reason": repair_reason,
                 "feedback": feedback["content"],
                 "exact": final_exact,
                 "partial": final_partial,

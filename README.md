@@ -90,6 +90,25 @@ python tools/dump_ksp_parts.py   # writes skills/ksp_parts.md
 
 ---
 
+## Game reasoning UI
+
+For a live browser dashboard of 2048 or Mastermind decisions, run:
+
+```bash
+# Real DeepSeek backend; requires DEEPSEEK_API_KEY in .env or the environment
+python -m examples.run_game_thought_ui --model deepseek --game 2048 --port 8766 --open-browser
+
+# Offline/demo mode with canned MockLLM responses
+python -m examples.run_game_thought_ui --model mock --game mastermind --port 8766 --open-browser
+```
+
+Then open `http://localhost:8766` if the browser does not open automatically.
+Use the header controls to switch games, seed, turn limit, Mastermind settings, and run mode. Press `Step` for one model action, or `Auto-run` to continue until the environment is terminal or the turn limit is reached. The `Turns` input updates the active session, so increasing it from `100` to `1000` can continue a run that already stopped at the old cap.
+
+The UI writes per-turn traces under `logs/evaluations/<game>/ui/<model>/`. The `Run` dropdown can start a `New run` or resume any non-empty JSONL log for the selected game. Resuming replays the logged actions locally to restore the board/history without re-calling the LLM for prior turns; future turns append to the resumed log. When starting a new run, existing non-empty default logs are not overwritten; a fresh timestamped filename is used instead.
+
+---
+
 ## Supported LLM backends
 
 | Flag | Class | Env var |

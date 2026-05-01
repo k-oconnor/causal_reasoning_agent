@@ -6,6 +6,7 @@ from causal_agent import (
     AgentConfig,
     Actor,
     FeedbackProcessor,
+    GameAction,
     MemoryStore,
     MockLLM,
     Orchestrator,
@@ -99,6 +100,57 @@ class GameSmokeTests(unittest.TestCase):
 
         self.assertTrue(env.is_terminal)
         self.assertTrue(result.terminal)
+
+    def test_mastermind_kripke_shrinks_after_feedback(self) -> None:
+        agent_id = "Agent"
+        env = MastermindEnv(
+            colors=["red", "green", "blue"],
+            code_length=2,
+            duplicates_allowed=False,
+            secret=["red", "green"],
+            agent_id=agent_id,
+        )
+        kripke = env.initial_kripke(agent_id)
+        self.assertEqual(len(kripke.worlds), 6)
+
+        env.step(
+            agent_id,
+            GameAction("guess", {"code": ["red", "blue"]}, agent_id),
+        )
+        obs = env.observe(agent_id)
+        shrunk = kripke.update_with_facts(obs["facts"])
+
+        from causal_agent.mastermind_tools import score_guess
+
+        self.assertLess(len(shrunk.worlds), len(kripke.worlds))
+        self.assertTrue(all(
+            score_guess(["red", "blue"], world.get("secret_code")) == (1, 0)
+            for world in shrunk.worlds
+        ))
+
+    def test_mastermind_action_spec_example_uses_unguessed_candidate(self) -> None:
+        agent_id = "Agent"
+        env = MastermindEnv(
+            colors=["red", "blue", "green", "yellow", "orange", "purple"],
+            code_length=4,
+            duplicates_allowed=False,
+            secret=["orange", "red", "yellow", "blue"],
+            agent_id=agent_id,
+        )
+        first_guess = ["red", "blue", "green", "yellow"]
+        env.step(agent_id, GameAction("guess", {"code": first_guess}, agent_id))
+
+        example = env.action_specs(agent_id)[0].examples[0]["code"]
+
+        from causal_agent.mastermind_tools import score_guess
+
+        first_feedback = env.history[0]
+        self.assertNotEqual(example, first_guess)
+        self.assertEqual(len(set(example)), len(example))
+        self.assertEqual(
+            score_guess(first_guess, example),
+            (first_feedback["exact"], first_feedback["partial"]),
+        )
 
 
 if __name__ == "__main__":

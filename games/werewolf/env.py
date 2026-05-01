@@ -44,6 +44,7 @@ from causal_agent.actions import ActionSpec, _ForbidExtraConfig, string_enum
 from games.base import GameEnvironment
 from causal_agent.kripke import KripkeModel, World
 from causal_agent.acting import GameAction
+from causal_agent.tools import ToolRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +284,9 @@ class WerewolfEnv(GameEnvironment):
                 ]
             return []
         return []
+
+    def tools(self, agent_id: str) -> ToolRegistry:
+        return ToolRegistry().enable_kripke_tools()
 
     @property
     def is_terminal(self) -> bool:

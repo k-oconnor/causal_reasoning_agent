@@ -134,6 +134,7 @@ class LLMResponse:
 
     content: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    assistant_message: dict[str, Any] | None = None
 
     @property
     def has_tool_calls(self) -> bool:
@@ -177,10 +178,16 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._entries: dict[str, tuple[ToolDefinition, Callable]] = {}
+        self.use_kripke_tools = False
 
     def register(self, definition: ToolDefinition, fn: Callable) -> "ToolRegistry":
         """Register a tool. Returns self for chaining."""
         self._entries[definition.name] = (definition, fn)
+        return self
+
+    def enable_kripke_tools(self) -> "ToolRegistry":
+        """Request live Kripke tools be attached by the planner at decision time."""
+        self.use_kripke_tools = True
         return self
 
     # -- Schema access --------------------------------------------------------

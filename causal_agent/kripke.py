@@ -16,6 +16,7 @@ Interventions (counterfactuals) are operations on this geometry:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -63,7 +64,7 @@ class World:
         _MISSING = object()
         for k, v in constraints.items():
             stored = self.get(k, _MISSING)
-            if stored is not _MISSING and stored != v:
+            if stored is not _MISSING and not _constraint_matches(stored, v):
                 return False
         return True
 
@@ -228,3 +229,18 @@ class KripkeModel:
 
     def __repr__(self) -> str:
         return f"KripkeModel(worlds={len(self.worlds)}, agents={list(self.accessibility)})"
+
+
+def _constraint_matches(stored: Any, constraint: Any) -> bool:
+    if isinstance(constraint, Mapping) and "$in" in constraint:
+        allowed = {_normalise_value(value) for value in constraint["$in"]}
+        return _normalise_value(stored) in allowed
+    return stored == constraint
+
+
+def _normalise_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return tuple(_normalise_value(item) for item in value)
+    if isinstance(value, tuple):
+        return tuple(_normalise_value(item) for item in value)
+    return value

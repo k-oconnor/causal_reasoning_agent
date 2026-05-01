@@ -18,6 +18,7 @@ from causal_agent.actions import ActionSpec
 if TYPE_CHECKING:
     from causal_agent.acting import GameAction
     from causal_agent.kripke import KripkeModel
+    from causal_agent.tools import ToolRegistry
 
 
 class GameEnvironment(ABC):
@@ -48,6 +49,15 @@ class GameEnvironment(ABC):
     initial_kripke(agent_id)
         Construct the KripkeModel for `agent_id` at game start, encoding
         what that agent initially knows and doesn't know.
+
+    system_prompt()
+        Optional game-specific system prompt for the planner.
+
+    tools(agent_id)
+        Optional ToolRegistry with game-specific planner tools.
+
+    preview(agent_id, action)
+        Optional read-only counterfactual for a candidate action.
     """
 
     @abstractmethod
@@ -68,6 +78,20 @@ class GameEnvironment(ABC):
     def valid_actions(self, agent_id: str) -> list[str]:
         """Legal action type names for legacy callers."""
         return [spec.action_type for spec in self.action_specs(agent_id)]
+
+    def system_prompt(self) -> str:
+        """Game-specific planner system prompt."""
+        from causal_agent.prompts import REACTIVE_SYSTEM
+
+        return REACTIVE_SYSTEM
+
+    def tools(self, agent_id: str) -> "ToolRegistry | None":
+        """Game-specific tools available to the planner."""
+        return None
+
+    def preview(self, agent_id: str, action: "GameAction") -> dict | None:
+        """Read-only counterfactual consequence for a candidate action."""
+        return None
 
     @property
     @abstractmethod

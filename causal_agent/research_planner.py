@@ -45,6 +45,7 @@ from typing import Any
 
 from causal_agent.llm import BaseLLM
 from causal_agent.memory import MemoryStore, MemoryEntry
+from causal_agent.tool_loop import run_tool_loop
 from causal_agent.tools import ToolRegistry, ToolCall, ToolResult
 
 log = logging.getLogger("causal_agent.research_planner")
@@ -157,86 +158,69 @@ class ResearchPlanner:
                     + messages[0]["content"]
                 )
 
-        for iterations in range(1, self._max_iter + 1):
-            log.info("-- planning iteration %d / %d --", iterations, self._max_iter)
+        def _on_tool_call(iteration: int, tc: ToolCall) -> None:
+            log.info("-- planning iteration %d / %d --", iteration, self._max_iter)
+            self._log_call(tc)
 
-            response = self._llm.complete_with_tools(
-                messages=messages,
-                registry=self._registry,
-                system=self._system,
-                max_tokens=self._max_tokens,
+        def _on_tool_result(
+            iteration: int,
+            tc: ToolCall,
+            result: ToolResult,
+        ) -> str | None:
+            self._log_result(result)
+            self._mem_write(
+                turn=iteration,
+                kind="tool_call",
+                source=tc.name,
+                content=result.content,
+                metadata={"arguments": tc.arguments},
             )
 
-            if response.is_final:
-                plan_text = response.content or ""
-                log.info(
-                    "planning complete — %d iterations, %d tool calls, %d chars",
-                    iterations, len(tool_call_log), len(plan_text),
-                )
-                log.debug("final plan:\n%s", plan_text)
-                self._mem_write(
-                    turn=iterations,
-                    kind="plan",
-                    source="planner",
-                    content=plan_text,
-                    metadata={"iterations": iterations, "tool_calls": len(tool_call_log)},
-                )
-                # If the agent skipped human_notify/plan_complete and just wrote a
-                # final text response, push it to the UI via human_notify so it
-                # doesn't silently disappear into the terminal.
-                used_plan_complete = any(
-                    e["call"]["name"] == "plan_complete" for e in tool_call_log
-                )
-                if not used_plan_complete and plan_text:
-                    self._push_to_ui(plan_text)
-                return PlanningResult(
-                    plan=plan_text,
-                    iterations=iterations,
-                    tool_calls=tool_call_log,
-                )
+            # plan_complete terminates the loop immediately — no more LLM calls.
+            if tc.name == "plan_complete" and self._plan_complete_summary is not None:
+                return self._plan_complete_summary
+            return None
 
-            # -- Tool calls: append assistant turn, dispatch, append results --
-            assistant_msg = self._assistant_message(response.tool_calls)
-            messages.append(assistant_msg)
+        loop_result = run_tool_loop(
+            llm=self._llm,
+            registry=self._registry,
+            messages=messages,
+            system=self._system,
+            max_iterations=self._max_iter,
+            max_tokens=self._max_tokens,
+            on_tool_call=_on_tool_call,
+            on_tool_result=_on_tool_result,
+        )
+        iterations = loop_result.iterations
+        tool_call_log = loop_result.tool_calls
 
-            for tc in response.tool_calls:
-                self._log_call(tc)
-                result: ToolResult = self._registry.dispatch(tc)
-                self._log_result(result)
-
-                entry = {"call": {"name": tc.name, "arguments": tc.arguments},
-                         "result": result.content}
-                tool_call_log.append(entry)
-
-                self._mem_write(
-                    turn=iterations,
-                    kind="tool_call",
-                    source=tc.name,
-                    content=result.content,
-                    metadata={"arguments": tc.arguments},
-                )
-
-                messages.append(result.to_openai_message())
-
-                # plan_complete terminates the loop immediately — no more LLM calls.
-                if tc.name == "plan_complete" and self._plan_complete_summary is not None:
-                    plan_text = self._plan_complete_summary
-                    log.info(
-                        "plan_complete called — stopping. %d iterations, %d tool calls, %d chars",
-                        iterations, len(tool_call_log), len(plan_text),
-                    )
-                    self._mem_write(
-                        turn=iterations,
-                        kind="plan",
-                        source="planner",
-                        content=plan_text,
-                        metadata={"iterations": iterations, "tool_calls": len(tool_call_log)},
-                    )
-                    return PlanningResult(
-                        plan=plan_text,
-                        iterations=iterations,
-                        tool_calls=tool_call_log,
-                    )
+        if not loop_result.truncated:
+            plan_text = loop_result.content
+            log.info(
+                "planning complete — %d iterations, %d tool calls, %d chars",
+                iterations, len(tool_call_log), len(plan_text),
+            )
+            log.debug("final plan:\n%s", plan_text)
+            self._mem_write(
+                turn=iterations,
+                kind="plan",
+                source="planner",
+                content=plan_text,
+                metadata={"iterations": iterations, "tool_calls": len(tool_call_log)},
+            )
+            # If the agent skipped human_notify/plan_complete and just wrote a
+            # final text response, push it to the UI via human_notify so it
+            # doesn't silently disappear into the terminal.
+            used_plan_complete = any(
+                entry["call"]["name"] == "plan_complete" for entry in tool_call_log
+            )
+            if not used_plan_complete and plan_text:
+                self._push_to_ui(plan_text)
+            return PlanningResult(
+                plan=plan_text,
+                iterations=iterations,
+                tool_calls=tool_call_log,
+            )
 
         # Hit max_iterations — try to recover from a human_notify call first.
         log.warning(
@@ -255,7 +239,10 @@ class ResearchPlanner:
                 + notify_content
             )
         else:
-            last_content = messages[-1].get("content", "") if messages else ""
+            last_content = (
+                loop_result.messages[-1].get("content", "")
+                if loop_result.messages else ""
+            )
             truncated_plan = (
                 f"[WARNING: planning truncated at {self._max_iter} iterations]\n\n"
                 + (last_content or "(no content)")

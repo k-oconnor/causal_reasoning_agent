@@ -13,7 +13,7 @@ MockLLM       – deterministic/canned responses; no API key needed (tests, demo
 OpenAILLM     – OpenAI chat completions (gpt-4o, etc.).
 AnthropicLLM  – Anthropic messages API (claude-3-5-sonnet, etc.).
 GeminiLLM     – Google Gemini generative AI (gemini-2.0-flash, etc.).
-DeepSeekLLM   – DeepSeek API via OpenAI-compatible interface (deepseek-chat, etc.).
+DeepSeekLLM   – DeepSeek API via OpenAI-compatible interface (deepseek-v4-flash, etc.).
 """
 
 from __future__ import annotations
@@ -279,7 +279,10 @@ class OpenAILLM(BaseLLM):
                 for tc in msg.tool_calls
             ]
             self._log_tool_calls(tcs)
-            return LLMResponse(tool_calls=tcs)
+            return LLMResponse(
+                tool_calls=tcs,
+                assistant_message=_openai_assistant_message(msg),
+            )
         result = msg.content or ""
         self._log_response(result)
         return LLMResponse(content=result)
@@ -590,7 +593,7 @@ class DeepSeekLLM(BaseLLM):
 
     Parameters
     ----------
-    model   : DeepSeek model slug, e.g. "deepseek-chat" or "deepseek-reasoner".
+    model   : DeepSeek model slug, e.g. "deepseek-v4-flash" or "deepseek-reasoner".
     api_key : if None, reads DEEPSEEK_API_KEY from the environment.
     kwargs  : forwarded to every chat.completions.create() call.
     """
@@ -599,7 +602,7 @@ class DeepSeekLLM(BaseLLM):
 
     def __init__(
         self,
-        model: str = "deepseek-chat",
+        model: str = "deepseek-v4-flash",
         api_key: str | None = None,
         **default_kwargs,
     ) -> None:
@@ -620,6 +623,11 @@ class DeepSeekLLM(BaseLLM):
         self._model = model
         self._defaults = default_kwargs
 
+    def _params(self, **kwargs) -> dict[str, Any]:
+        params = {"temperature": 0.7, "max_tokens": 1000, **self._defaults, **kwargs}
+        params.setdefault("extra_body", {"thinking": {"type": "disabled"}})
+        return params
+
     def complete(self, prompt: str, system: str = "", **kwargs) -> str:
         self._log_request(prompt, system)
         messages = []
@@ -627,7 +635,7 @@ class DeepSeekLLM(BaseLLM):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        params = {"temperature": 0.7, "max_tokens": 1000, **self._defaults, **kwargs}
+        params = self._params(**kwargs)
         resp = self._client.chat.completions.create(
             model=self._model, messages=messages, **params,
         )
@@ -644,7 +652,7 @@ class DeepSeekLLM(BaseLLM):
             all_messages.append({"role": "system", "content": system})
         all_messages.extend(messages)
 
-        params = {"temperature": 0.7, "max_tokens": 1000, **self._defaults, **kwargs}
+        params = self._params(**kwargs)
         resp = self._client.chat.completions.create(
             model=self._model,
             messages=all_messages,
@@ -659,7 +667,10 @@ class DeepSeekLLM(BaseLLM):
                 for tc in msg.tool_calls
             ]
             self._log_tool_calls(tcs)
-            return LLMResponse(tool_calls=tcs)
+            return LLMResponse(
+                tool_calls=tcs,
+                assistant_message=_openai_assistant_message(msg),
+            )
         result = msg.content or ""
         self._log_response(result)
         return LLMResponse(content=result)
@@ -681,12 +692,7 @@ class DeepSeekLLM(BaseLLM):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": schema_prompt})
 
-        params = {
-            "temperature": 0.7,
-            "max_tokens": 1000,
-            **self._defaults,
-            **kwargs,
-        }
+        params = self._params(**kwargs)
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
@@ -707,6 +713,32 @@ class DeepSeekLLM(BaseLLM):
 # ---------------------------------------------------------------------------
 # Structured-output helpers
 # ---------------------------------------------------------------------------
+
+def _openai_assistant_message(message: Any) -> dict[str, Any]:
+    """Serialize an OpenAI-compatible assistant message for tool-loop history."""
+    data: dict[str, Any] = {
+        "role": "assistant",
+        "content": getattr(message, "content", None),
+    }
+    reasoning_content = getattr(message, "reasoning_content", None)
+    if reasoning_content is not None:
+        data["reasoning_content"] = reasoning_content
+
+    tool_calls = getattr(message, "tool_calls", None)
+    if tool_calls:
+        data["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": getattr(tc, "type", "function"),
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in tool_calls
+        ]
+    return data
+
 
 def _extract_json_object(raw: str) -> dict[str, Any]:
     cleaned = raw.strip()

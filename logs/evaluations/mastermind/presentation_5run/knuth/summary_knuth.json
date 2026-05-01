@@ -1,0 +1,16 @@
+{
+  "code_length": 4,
+  "duplicates_allowed": false,
+  "episodes": 5,
+  "game": "mastermind",
+  "games_solved": 5,
+  "invalid_moves": 0,
+  "max_attempts": 10,
+  "mean_guesses": 4.2,
+  "mean_guesses_solved": 4.2,
+  "mean_remaining_candidates": 1,
+  "median_guesses": 4,
+  "num_colors": 6,
+  "policy": "knuth",
+  "solve_rate": 1.0
+}
