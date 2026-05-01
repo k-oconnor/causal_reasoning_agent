@@ -17,6 +17,7 @@ from causal_agent.feedback import FeedbackProcessor, FeedbackEvent, FeedbackKind
 from causal_agent.planning import Planner, Plan
 from causal_agent.acting import Actor, GameAction, ActionError
 from causal_agent.orchestration import Orchestrator, AgentConfig, SessionResult
+from causal_agent.game_trace import GameRunConfig, GameThoughtSession, TurnTrace
 
 __all__ = [
     # logging
@@ -46,4 +47,6 @@ __all__ = [
     "Actor", "GameAction", "ActionError",
     # orchestration
     "Orchestrator", "AgentConfig", "SessionResult",
+    # game UI traces
+    "GameRunConfig", "GameThoughtSession", "TurnTrace",
 ]

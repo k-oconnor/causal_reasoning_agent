@@ -26,6 +26,7 @@ reason about them in language.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from dataclasses import dataclass, field
@@ -118,6 +119,12 @@ class Planner:
         self._tools = tools
         self._preview = preview
         self._max_tool_calls = max_tool_calls
+        self._last_trace: dict[str, Any] = {}
+
+    @property
+    def last_trace(self) -> dict[str, Any]:
+        """Safe, public-facing trace for the most recent planning call."""
+        return copy.deepcopy(self._last_trace)
 
     # ------------------------------------------------------------------
     # Public API
@@ -150,6 +157,7 @@ class Planner:
 
         intervention_notes: list[str] = []
         preview_notes = self._preview_notes(agent_id, specs)
+        parse_errors: list[str] = []
 
         if self._simulate and action_types:
             for action in action_types:
@@ -157,6 +165,27 @@ class Planner:
                     kripke, {"last_action_type": action}, agent_id
                 )
                 intervention_notes.append(f"[{action}]: {note}")
+
+        trace: dict[str, Any] = {
+            "agent_id": agent_id,
+            "goal": goal,
+            "legal_actions": [
+                {
+                    "action_type": spec.action_type,
+                    "description": spec.description,
+                    "examples": spec.examples,
+                }
+                for spec in specs
+            ],
+            "intervention_notes": list(intervention_notes),
+            "preview_notes": list(preview_notes),
+            "tool_calls": [],
+            "tool_iterations": 0,
+            "tools_truncated": False,
+            "parse_errors": parse_errors,
+            "fallback": False,
+        }
+        self._last_trace = trace
 
         prompt = self._build_prompt(
             kripke=kripke,
@@ -184,9 +213,16 @@ class Planner:
             try:
                 if active_tools:
                     try:
-                        raw = self._complete_with_tools(retry_prompt, active_tools)
+                        loop_result = self._complete_with_tools(retry_prompt, active_tools)
+                        raw = loop_result.content
+                        trace["tool_calls"] = loop_result.tool_calls
+                        trace["tool_iterations"] = loop_result.iterations
+                        trace["tools_truncated"] = loop_result.truncated
                     except NotImplementedError:
                         active_tools = None
+                        trace["tool_error"] = (
+                            f"{self._llm.__class__.__name__} does not support tool calls."
+                        )
                         raw = self._llm.complete_structured(
                             retry_prompt,
                             schema=plan_schema,
@@ -202,9 +238,12 @@ class Planner:
                 break
             except (ActionSchemaError, PlanParseError, ValueError) as exc:
                 last_error = str(exc)
+                parse_errors.append(last_error)
 
         if plan is None:
             plan = self._fallback_plan(specs, last_error)
+            trace["fallback"] = True
+            trace["fallback_reason"] = last_error
 
         plan.intervention_notes = intervention_notes
 
@@ -214,6 +253,14 @@ class Planner:
             if w.matches({"last_action_type": plan.action_type})
         ] or [w.id for w in kripke.worlds[:3]]
 
+        trace["decision"] = {
+            "intent": plan.intent,
+            "action_type": plan.action_type,
+            "parameters": plan.parameters,
+            "public_rationale": plan.reasoning,
+            "supporting_worlds": list(plan.supporting_worlds[:12]),
+            "supporting_world_count": len(plan.supporting_worlds),
+        }
         return plan
 
     def evaluate_intervention(
@@ -299,15 +346,14 @@ class Planner:
             KripkeToolset(lambda: kripke).register_all(registry)
         return registry if registry and len(registry) > 0 else None
 
-    def _complete_with_tools(self, prompt: str, registry: ToolRegistry) -> str:
-        result = run_tool_loop(
+    def _complete_with_tools(self, prompt: str, registry: ToolRegistry):
+        return run_tool_loop(
             llm=self._llm,
             registry=registry,
             messages=[{"role": "user", "content": prompt}],
             system=self._system,
             max_iterations=self._max_tool_calls,
         )
-        return result.content
 
     def _preview_notes(
         self,
