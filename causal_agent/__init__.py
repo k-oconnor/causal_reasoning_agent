@@ -18,6 +18,16 @@ from causal_agent.planning import Planner, Plan
 from causal_agent.acting import Actor, GameAction, ActionError
 from causal_agent.orchestration import Orchestrator, AgentConfig, SessionResult
 from causal_agent.game_trace import GameRunConfig, GameThoughtSession, TurnTrace
+from causal_agent.error_localization import (
+    ErrorLocalizationConfig,
+    LocalizationFinding,
+    LocalizationResult,
+    TracerAdapter,
+    add_error_localization_args,
+    build_turn_audit_script,
+    config_from_args,
+    localization_goal,
+)
 
 __all__ = [
     # logging
@@ -49,4 +59,8 @@ __all__ = [
     "Orchestrator", "AgentConfig", "SessionResult",
     # game UI traces
     "GameRunConfig", "GameThoughtSession", "TurnTrace",
+    # error localization
+    "ErrorLocalizationConfig", "LocalizationFinding", "LocalizationResult",
+    "TracerAdapter", "add_error_localization_args", "build_turn_audit_script",
+    "config_from_args", "localization_goal",
 ]

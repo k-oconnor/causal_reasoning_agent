@@ -24,3 +24,6 @@ env/
 
 # Generated run logs
 write_up/
+
+# Local reference material only
+error_localization/

@@ -1,0 +1,28 @@
+{
+  "action_changed_after_localization": 0,
+  "episodes": 1,
+  "game": "werewolf",
+  "invalid_moves": 0,
+  "localization": "trace",
+  "localization_findings": 3,
+  "localization_logic_findings": 2,
+  "localization_runs": 2,
+  "localization_skipped": 0,
+  "max_turns": 6,
+  "mean_reward": -1.0,
+  "mean_turns": 3,
+  "n_werewolves": 1,
+  "players": [
+    "Agent",
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dave"
+  ],
+  "policy": "llm",
+  "replans_triggered": 0,
+  "survival_rate": 0.0,
+  "terminal_episodes": 1,
+  "win_rate": 0.0,
+  "wins": 0
+}

@@ -111,6 +111,56 @@ class EvaluationSmokeTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((Path(tmp) / "summary_candidate.json").exists())
 
+    def test_werewolf_eval_cli_smoke_without_localization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "evaluations.werewolf.eval",
+                    "--model",
+                    "mock",
+                    "--episodes",
+                    "1",
+                    "--max-turns",
+                    "6",
+                    "--log-dir",
+                    tmp,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((Path(tmp) / "summary_llm_off.json").exists())
+
+    def test_werewolf_eval_cli_smoke_trace_mode_without_tracer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "evaluations.werewolf.eval",
+                    "--model",
+                    "mock",
+                    "--episodes",
+                    "1",
+                    "--max-turns",
+                    "6",
+                    "--localization",
+                    "trace",
+                    "--log-dir",
+                    tmp,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((Path(tmp) / "summary_llm_trace.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
