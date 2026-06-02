@@ -1,0 +1,70 @@
+{
+  "opponent_id": "koconnor_naive_defect",
+  "opponent_name": "koconnor_naive_defect",
+  "matches_played": 1,
+  "score_history": [
+    -0.125
+  ],
+  "move_history": [
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 1,
+      "my_move": 0,
+      "their_move": 1
+    },
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 2,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 3,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 4,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 5,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 6,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 7,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "4c6a92cb-ae64-4c07-9379-97fa6e8cd970",
+      "round": 8,
+      "my_move": 1,
+      "their_move": 1
+    }
+  ],
+  "remaining_worlds": [
+    "always_defect",
+    "random"
+  ],
+  "eliminated_worlds": [
+    "always_cooperate",
+    "tit_for_tat",
+    "grim_trigger",
+    "pavlov",
+    "tit_for_two_tats"
+  ],
+  "notes": "From this match, your opponent consistently defected every round, which perfectly matches the 'always_defect' strategy. The 'random' strategy is not eliminated but is far less likely given the uniform defection pattern. In future matches, you should defect every round against them to avoid the -1 loss from cooperating into their defection."
+}

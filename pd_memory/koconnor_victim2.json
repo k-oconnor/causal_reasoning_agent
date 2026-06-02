@@ -1,0 +1,70 @@
+{
+  "opponent_id": "koconnor_victim2",
+  "opponent_name": "koconnor_victim2",
+  "matches_played": 1,
+  "score_history": [
+    2.375
+  ],
+  "move_history": [
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 1,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 2,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 3,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 4,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 5,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 6,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "6893ce42-64ee-40ae-8040-b7143bd67618",
+      "round": 8,
+      "my_move": 1,
+      "their_move": 0
+    }
+  ],
+  "remaining_worlds": [
+    "always_cooperate",
+    "tit_for_tat",
+    "grim_trigger",
+    "pavlov",
+    "tit_for_two_tats",
+    "random"
+  ],
+  "eliminated_worlds": [
+    "always_defect"
+  ],
+  "notes": "Based on the match, you defected on the last round, and they still cooperated. This eliminates Tit-for-Tat (which would have defected in round 8), Grim Trigger (which would have defected permanently after your defection), and Tit-for-Two-Tats (which would have defected after two defections). Pavlov would have defected after a mutual cooperation, but they didn't, so it's likely Always Cooperate or Random.\n\nAgainst Always Cooperate, you should defect every round to maximize your score. However, since Random is still possible, I recommend defecting again next round; if they cooperate, you can be nearly certain they are Always Cooperate and continue defecting. If they defect, you'll know they are Random and can adjust accordingly."
+}

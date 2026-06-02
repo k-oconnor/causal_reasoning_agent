@@ -1,0 +1,119 @@
+{
+  "opponent_id": "koconnor_naive_coop",
+  "opponent_name": "koconnor_naive_coop",
+  "matches_played": 2,
+  "score_history": [
+    3.5,
+    2.0
+  ],
+  "move_history": [
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 1,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 2,
+      "my_move": 1,
+      "their_move": 0
+    },
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 3,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 4,
+      "my_move": 1,
+      "their_move": 0
+    },
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 5,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 6,
+      "my_move": 1,
+      "their_move": 0
+    },
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "a73afedd-5fce-42f6-a11c-173c49759d19",
+      "round": 8,
+      "my_move": 1,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 1,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 2,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 3,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 4,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 5,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 6,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "cb3d7621-3123-4e7f-a413-13631acbf19c",
+      "round": 8,
+      "my_move": 0,
+      "their_move": 0
+    }
+  ],
+  "remaining_worlds": [
+    "always_cooperate",
+    "tit_for_two_tats",
+    "random"
+  ],
+  "eliminated_worlds": [
+    "always_defect",
+    "tit_for_tat",
+    "grim_trigger",
+    "pavlov"
+  ],
+  "notes": "From the match history, the opponent has cooperated every round, which is consistent with always_cooperate, tit_for_two_tats (since I never defected), or random (unlikely but possible). Since always_cooperate is a live possibility, I should test by defecting once next match: if they cooperate after, they are likely always_cooperate, allowing me to defect every round; if they retaliate, they are tit_for_two_tats and I should cooperate thereafter for mutual benefit."
+}
