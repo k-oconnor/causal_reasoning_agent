@@ -1,8 +1,9 @@
 {
   "opponent_id": "koconnor_naive_defect",
   "opponent_name": "koconnor_naive_defect",
-  "matches_played": 1,
+  "matches_played": 2,
   "score_history": [
+    -0.125,
     -0.125
   ],
   "move_history": [
@@ -53,6 +54,54 @@
       "round": 8,
       "my_move": 1,
       "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 1,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 2,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 3,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 4,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 5,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 6,
+      "my_move": 1,
+      "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 1
+    },
+    {
+      "session_id": "089dc5ec-a459-4b6e-bdf5-cc29e4f2dffd",
+      "round": 8,
+      "my_move": 1,
+      "their_move": 1
     }
   ],
   "remaining_worlds": [
@@ -66,5 +115,5 @@
     "pavlov",
     "tit_for_two_tats"
   ],
-  "notes": "From this match, your opponent consistently defected every round, which perfectly matches the 'always_defect' strategy. The 'random' strategy is not eliminated but is far less likely given the uniform defection pattern. In future matches, you should defect every round against them to avoid the -1 loss from cooperating into their defection."
+  "notes": "Based on the history, the opponent has defected in all eight rounds except one, and the only remaining strategies are 'always_defect' and 'random'. This strongly suggests they are an always_defect player, as a random strategy would likely have cooperated at least a couple times. In future matches, I should defect every round to maximize my score, as cooperating only loses points against this opponent."
 }

@@ -1,10 +1,12 @@
 {
   "opponent_id": "koconnor_naive_coop",
   "opponent_name": "koconnor_naive_coop",
-  "matches_played": 2,
+  "matches_played": 4,
   "score_history": [
     3.5,
-    2.0
+    2.0,
+    2.0,
+    1.625
   ],
   "move_history": [
     {
@@ -102,18 +104,114 @@
       "round": 8,
       "my_move": 0,
       "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 1,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 2,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 3,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 4,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 5,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 6,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "27025115-38de-4701-88fa-8c0c65ca39a6",
+      "round": 8,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 1,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 2,
+      "my_move": 0,
+      "their_move": 1
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 3,
+      "my_move": 0,
+      "their_move": 1
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 4,
+      "my_move": 1,
+      "their_move": 0
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 5,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 6,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "ab6384ed-6b89-4a52-91ad-592e8f5ec5e9",
+      "round": 8,
+      "my_move": 0,
+      "their_move": 0
     }
   ],
   "remaining_worlds": [
-    "always_cooperate",
-    "tit_for_two_tats",
     "random"
   ],
   "eliminated_worlds": [
+    "always_cooperate",
     "always_defect",
     "tit_for_tat",
     "grim_trigger",
-    "pavlov"
+    "pavlov",
+    "tit_for_two_tats"
   ],
-  "notes": "From the match history, the opponent has cooperated every round, which is consistent with always_cooperate, tit_for_two_tats (since I never defected), or random (unlikely but possible). Since always_cooperate is a live possibility, I should test by defecting once next match: if they cooperate after, they are likely always_cooperate, allowing me to defect every round; if they retaliate, they are tit_for_two_tats and I should cooperate thereafter for mutual benefit."
+  "notes": "Based on this match, the opponent's moves are highly inconsistent with any deterministic strategy \u2014 they alternated between cooperation and defection unpredictably. Since only the 'random' strategy remains, the best approach is to defect every round, as cooperating offers no reliable benefit against a random opponent. This maximizes your expected payoff by avoiding the -1 loss when you cooperate and they defect."
 }

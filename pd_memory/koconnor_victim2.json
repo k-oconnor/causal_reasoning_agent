@@ -1,9 +1,10 @@
 {
   "opponent_id": "koconnor_victim2",
   "opponent_name": "koconnor_victim2",
-  "matches_played": 1,
+  "matches_played": 2,
   "score_history": [
-    2.375
+    2.375,
+    2.0
   ],
   "move_history": [
     {
@@ -53,6 +54,54 @@
       "round": 8,
       "my_move": 1,
       "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 1,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 2,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 3,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 4,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 5,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 6,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "76e6c1a6-701b-4aa7-bf15-e8a8e55f4119",
+      "round": 8,
+      "my_move": 0,
+      "their_move": 0
     }
   ],
   "remaining_worlds": [
@@ -66,5 +115,5 @@
   "eliminated_worlds": [
     "always_defect"
   ],
-  "notes": "Based on the match, you defected on the last round, and they still cooperated. This eliminates Tit-for-Tat (which would have defected in round 8), Grim Trigger (which would have defected permanently after your defection), and Tit-for-Two-Tats (which would have defected after two defections). Pavlov would have defected after a mutual cooperation, but they didn't, so it's likely Always Cooperate or Random.\n\nAgainst Always Cooperate, you should defect every round to maximize your score. However, since Random is still possible, I recommend defecting again next round; if they cooperate, you can be nearly certain they are Always Cooperate and continue defecting. If they defect, you'll know they are Random and can adjust accordingly."
+  "notes": "From the first eight rounds, the opponent has cooperated every single time, which is consistent with always_cooperate, tit_for_tat, grim_trigger, pavlov, and tit_for_two_tats. I cannot yet distinguish these because I have not defected to test their response. In the next match, I should defect once early to see if they retaliate; if they do not, they are likely always_cooperate, and I can defect every round thereafter for maximum score."
 }

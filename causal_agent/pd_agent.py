@@ -56,18 +56,35 @@ PAYOFF MATRIX (per round, action codes: 0=Cooperate, 1=Defect):
 
 Scoring: average per-round payoff across all rounds (lower rounds don't matter more).
 
+CRITICAL TOURNAMENT CONTEXT: This is a tournament of tournaments. You will play the
+SAME opponents across multiple tournaments. Your per-round average score is computed
+across ALL matches ever played. Opponents remember your past moves via persistent
+memory — just as you do. This completely changes end-game reasoning:
+- There is NO "last round" you can safely exploit. Defecting on round 8 is recorded
+  in the opponent's memory and will cause them to defect earlier in future rematches.
+- Sustained mutual cooperation (+2/round every match) beats one +5 snipe followed
+  by mutual defection (0/round) in all future rematches. Even 2 future rematches
+  makes last-round defection a net negative.
+- Reputation IS strategy. Cooperate consistently and reliably with cooperative agents.
+
 Your Kripke model represents uncertainty about the opponent's strategy. Each remaining
 world is a strategy hypothesis. Use the Kripke tools to reason about what you know
 for certain and what is still uncertain before deciding.
 
 Guidelines:
-- Early rounds: consider probing (defecting once) to distinguish TfT/Grim from AlwaysCooperate.
-- If you're certain the opponent is AlwaysCooperate, defecting every round maximises score.
-- Against TfT: mutual cooperation (C,C) yields +2/round — better than mutual defection (0/round).
-- Against Grim: one defection triggers permanent defection. Test carefully.
+- Round 1: always cooperate. Probe by defecting only once in round 2 if needed.
+- If opponent defects on you: switch to D and maintain it (0/round > -1/round).
+- If opponent cooperates consistently: cooperate every round INCLUDING the last.
+- NEVER defect on the last round against a cooperative opponent — future rematches matter.
 - Against AlwaysDefect: defect back — cooperation just loses you points.
-- Messages can be used to signal intentions, ask about strategy, or propose cooperation pacts.
-  Keep messages under 50 words. Be honest enough to be credible but strategic.
+- LEADERBOARD STRATEGY: Use pd_get_leaderboard to see current standings.
+  If the opponent is ranked #1 with a high average, consider defecting against them —
+  you may gain +5 while pulling their average down, a double advantage.
+  If you are comfortably leading, play cooperatively to protect your average.
+  If you are far behind a specific agent, targeted defection against them is valid.
+- Messages do not need to be truthful — deception is explicitly permitted by the rules.
+  Use messaging to propose cooperation pacts, signal intent, or strategically mislead.
+  Keep messages under 50 words.
 
 Always output your final decision as a JSON object:
   For moves:    {"action": 0, "reasoning": "..."}  (0=cooperate, 1=defect)
@@ -182,6 +199,7 @@ class PDAgent:
         self.access_token: str | None = None
         self._model_ref: list[KripkeModel] = [KripkeModel(worlds=[])]
         self._injection_sent = False  # reset per game in play_game
+        self._tournament_id: str | None = None  # set by run_tournament for leaderboard queries
 
     # ------------------------------------------------------------------
     # Auth helpers
@@ -316,7 +334,39 @@ class PDAgent:
     # ------------------------------------------------------------------
 
     def _init_kripke(self, opponent_id: str) -> KripkeModel:
+        from causal_agent.pd_tournament_strategy import infer_worlds_from_stats
+
+        # Start with memory-based worlds (per-opponent history)
         remaining = self.memory.get_remaining_worlds(opponent_id)
+
+        # Intersect with tournament-level inference if we have leaderboard data
+        leaderboard = self._fetch_leaderboard_data()
+        opponent_entry = next((p for p in leaderboard if p["name"] == opponent_id), None)
+        if opponent_entry:
+            g = opponent_entry["total_games"]
+            inferred = infer_worlds_from_stats(
+                opponent_entry["wins"],
+                opponent_entry["losses"],
+                opponent_entry["draws"],
+                opponent_entry["avg_score"],
+                g,
+            )
+            # Intersect: keep only worlds consistent with BOTH memory and tournament stats
+            combined = [w for w in remaining if w in inferred]
+            if combined:  # don't wipe out all worlds if intersection is empty
+                remaining = combined
+                log.info(
+                    "Kripke prior narrowed by tournament stats for %s "
+                    "(avg=%.2f, W=%d L=%d D=%d games=%d): %s",
+                    opponent_id,
+                    opponent_entry["avg_score"],
+                    opponent_entry["wins"],
+                    opponent_entry["losses"],
+                    opponent_entry["draws"],
+                    g,
+                    remaining,
+                )
+
         worlds = [
             World.from_dict(
                 strategy,
@@ -435,6 +485,20 @@ class PDAgent:
             self._tool_recall_opponent,
         )
 
+        registry.register(
+            ToolDefinition(
+                name="pd_get_leaderboard",
+                description=(
+                    "Fetch the current tournament leaderboard showing all agents' average payoff, "
+                    "rank, wins, losses, and total rounds played. Use this to identify the current "
+                    "leader (consider defecting against them to hurt their average) and to see your "
+                    "own standing relative to others."
+                ),
+                parameters={"type": "object", "properties": {}},
+            ),
+            self._tool_get_leaderboard,
+        )
+
         return registry
 
     def _tool_predict_opponent(self, my_history: list[int], their_history: list[int]) -> str:
@@ -499,6 +563,64 @@ class PDAgent:
             lines.append(f"  Recent rounds (last {len(recent)}): " + ", ".join(
                 f"R{r['round']}:my={r['my_move']},them={r['their_move']}" for r in recent
             ))
+        return "\n".join(lines)
+
+    def _fetch_leaderboard_data(self) -> list[dict]:
+        """Fetch and parse leaderboard participants from the active tournament."""
+        if not self._tournament_id:
+            return []
+        try:
+            resp = requests.get(
+                f"{CONTROL_PLANE}/tournaments/{self._tournament_id}",
+                headers=self._headers(),
+                timeout=10,
+            )
+            participants = resp.json().get("participants") or []
+            result = []
+            for p in participants:
+                name = (p.get("agents") or {}).get("name") or p.get("agent_id", "?")
+                total = float(p.get("total_payoff") or 0)
+                games = int(p.get("total_games") or 0)
+                avg = total / games if games > 0 else 0.0
+                result.append({
+                    "name": name,
+                    "avg_score": avg,
+                    "total_payoff": total,
+                    "total_games": games,
+                    "wins":   int(p.get("wins")   or 0),
+                    "losses": int(p.get("losses") or 0),
+                    "draws":  int(p.get("draws")  or 0),
+                })
+            return result
+        except Exception:
+            return []
+
+    def _tool_get_leaderboard(self) -> str:
+        from causal_agent.pd_tournament_strategy import infer_worlds_from_stats, describe_inferred_strategy, targeting_advice
+
+        participants = self._fetch_leaderboard_data()
+        if not participants:
+            return "Leaderboard not yet available."
+
+        my_entry = next((p for p in participants if p["name"] == self.agent_name), None)
+        my_avg = my_entry["avg_score"] if my_entry else 0.0
+
+        ranked = sorted(participants, key=lambda x: x["avg_score"], reverse=True)
+        lines = ["Current tournament leaderboard (sorted by avg payoff/round):"]
+        for i, p in enumerate(ranked, 1):
+            name = p["name"]
+            avg = p["avg_score"]
+            g = p["total_games"]
+            w, l, d = p["wins"], p["losses"], p["draws"]
+            worlds = infer_worlds_from_stats(w, l, d, avg, g)
+            desc = describe_inferred_strategy(worlds)
+            marker = " <- YOU" if name == self.agent_name else ""
+            lines.append(
+                f"  #{i} {name}: avg={avg:.3f}, games={g}, W={w} L={l} D={d} | {desc}{marker}"
+            )
+
+        lines.append("")
+        lines.append(targeting_advice(self.agent_name, my_avg, participants))
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -861,8 +983,9 @@ class PDAgent:
 
     def run_tournament(self, tournament_id: str) -> None:
         """Poll the tournament and play each match until tournament_complete."""
+        self._tournament_id = tournament_id
         self.join_tournament(tournament_id)
-        print(f"Joined tournament {tournament_id}. Waiting for matches…")
+        print(f"Joined tournament {tournament_id}. Waiting for matches...")
 
         while True:
             data = self.poll_tournament(tournament_id)

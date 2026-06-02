@@ -24,3 +24,7 @@ env/
 
 # Generated run logs
 write_up/
+
+# PD tournament memory (varies per run, contains opponent IDs)
+pd_memory/
+pd_memory_victim/
