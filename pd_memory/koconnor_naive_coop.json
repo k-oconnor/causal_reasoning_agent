@@ -1,12 +1,13 @@
 {
   "opponent_id": "koconnor_naive_coop",
   "opponent_name": "koconnor_naive_coop",
-  "matches_played": 4,
+  "matches_played": 5,
   "score_history": [
     3.5,
     2.0,
     2.0,
-    1.625
+    1.625,
+    2.375
   ],
   "move_history": [
     {
@@ -200,6 +201,54 @@
       "round": 8,
       "my_move": 0,
       "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 1,
+      "my_move": 1,
+      "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 2,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 3,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 4,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 5,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 6,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 7,
+      "my_move": 0,
+      "their_move": 0
+    },
+    {
+      "session_id": "2cc409ac-cb46-4472-a482-d9e5ac249c1f",
+      "round": 8,
+      "my_move": 0,
+      "their_move": 0
     }
   ],
   "remaining_worlds": [
@@ -213,5 +262,5 @@
     "pavlov",
     "tit_for_two_tats"
   ],
-  "notes": "Based on this match, the opponent's moves are highly inconsistent with any deterministic strategy \u2014 they alternated between cooperation and defection unpredictably. Since only the 'random' strategy remains, the best approach is to defect every round, as cooperating offers no reliable benefit against a random opponent. This maximizes your expected payoff by avoiding the -1 loss when you cooperate and they defect."
+  "notes": "The opponent is highly cooperative, never defecting despite my round 1 defection, which suggests a forgiving or naive cooperative strategy (possibly AlwaysCooperate or a similar variant). Given that only 'random' remains uneliminated but their consistent cooperation contradicts random behavior, I should exploit this by defecting occasionally for extra points while still cooperating most rounds to maintain their trust. Against this naive cooperator, I can safely defect on early rounds and still expect cooperation, but I should avoid repeated defections to prevent them from switching to a tit-for-tat response."
 }

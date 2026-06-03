@@ -37,15 +37,29 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def pick_action(strategy: str, legal: list[int]) -> int:
+_tft_history: list[int] = []  # opponent move history for TfT
+
+
+def pick_action(strategy: str, legal: list[int], state: dict | None = None) -> int:
+    global _tft_history
     if strategy == "cooperate":
         return 0 if 0 in legal else legal[0]
     if strategy == "defect":
         return 1 if 1 in legal else legal[0]
+    if strategy == "tit_for_tat":
+        # Mirror the opponent's last move; cooperate on round 1
+        return _tft_history[-1] if _tft_history else 0
+    if strategy == "tit_for_two_tats":
+        # Defect only if opponent defected twice in a row
+        if len(_tft_history) >= 2 and _tft_history[-1] == 1 and _tft_history[-2] == 1:
+            return 1
+        return 0
     return random.choice(legal)
 
 
 def play_game(token: str, game_server_url: str, session_id: str, strategy: str) -> None:
+    global _tft_history
+    _tft_history = []  # reset per game
     h = auth(token)
     print(f"  Playing game {session_id} ({strategy})")
     while True:
@@ -70,10 +84,32 @@ def play_game(token: str, game_server_url: str, session_id: str, strategy: str) 
                           json={"type": "terminate", "recipients": []}, headers=h, timeout=10)
         elif act == "make_move":
             legal = state.get("legal_actions", [0, 1])
-            move = pick_action(strategy, legal)
-            requests.post(f"{game_server_url}/games/{session_id}/step",
+            move = pick_action(strategy, legal, state)
+            resp = requests.post(f"{game_server_url}/games/{session_id}/step",
                           json={"action": move},
                           headers={**h, "Content-Type": "application/json"}, timeout=10)
+            # After submitting, update TfT history from last_round
+            if strategy in ("tit_for_tat", "tit_for_two_tats"):
+                last = state.get("last_round") or {}
+                actions_map = last.get("actions", {})
+                for name, a in actions_map.items():
+                    if name not in (token, "koconnor_naive_coop", "koconnor_naive_defect"):
+                        # Heuristic: the other player's action
+                        pass
+                # Simpler: just look at round_history for the last opponent move
+                rh = state.get("round_history", [])
+                if rh:
+                    last_actions = rh[-1].get("actions", {})
+                    for name, opp_move in last_actions.items():
+                        # Take the one we didn't play
+                        if opp_move != move:
+                            _tft_history.append(int(opp_move))
+                            break
+                    else:
+                        # Both played the same — just record opponent move heuristically
+                        vals = list(last_actions.values())
+                        if len(vals) == 2:
+                            _tft_history.append(int(vals[0]))
         elif act == "game_over":
             return
         else:
@@ -153,7 +189,8 @@ if __name__ == "__main__":
     p.add_argument("--api-key", required=True)
     p.add_argument("--queue-id")
     p.add_argument("--tournament-id")
-    p.add_argument("--strategy", default="cooperate", choices=["cooperate", "defect", "random"])
+    p.add_argument("--strategy", default="cooperate",
+                   choices=["cooperate", "defect", "random", "tit_for_tat", "tit_for_two_tats"])
     args = p.parse_args()
     if not args.queue_id and not args.tournament_id:
         p.error("Provide either --queue-id or --tournament-id")

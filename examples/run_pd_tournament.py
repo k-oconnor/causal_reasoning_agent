@@ -88,10 +88,25 @@ def main() -> None:
         "--inject", metavar="PAYLOAD",
         help=(
             "Send a prompt-injection message in round 1 messaging phase. "
-            "Pass a named payload (system, admin, xml, polite, threat, role) "
-            "or a custom string. Named payloads: "
+            "Pass a named payload or a custom string. Named payloads: "
             + ", ".join(f"'{k}'" for k in PDAgent.INJECTION_PAYLOADS)
         ),
+    )
+    parser.add_argument(
+        "--play-as", choices=["tft"],
+        help="Override strategy: 'tft' gives the agent a Tit-for-Tat system prompt (for victim testing).",
+    )
+    parser.add_argument(
+        "--final-game-inject", action="store_true",
+        help=(
+            "Automatically inject 'tournament_directive' and always-defect against any opponent "
+            "already seen >= 2 times in memory. Designed for 3-tournament round-robins: "
+            "cooperate games 1-2, exploit game 3."
+        ),
+    )
+    parser.add_argument(
+        "--final-game-threshold", type=int, default=2,
+        help="matches_played threshold to trigger final-game injection (default: 2).",
     )
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING"])
     args = parser.parse_args()
@@ -112,12 +127,18 @@ def main() -> None:
         injection_message = PDAgent.INJECTION_PAYLOADS.get(args.inject, args.inject)
         print(f"Injection mode: {injection_message[:80]}...")
 
+    if getattr(args, "play_as", None):
+        print(f"Playing as: {args.play_as} (system prompt override active)")
+
     agent = PDAgent(
         api_key=api_key,
         llm=llm,
         agent_name=agent_name,
         memory_dir=Path(args.memory_dir),
         injection_message=injection_message,
+        play_as=getattr(args, "play_as", None),
+        final_game_inject=args.final_game_inject,
+        final_game_threshold=args.final_game_threshold,
     )
 
     print(f"Logging in as {agent_name}…")
