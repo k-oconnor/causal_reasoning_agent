@@ -97,12 +97,8 @@ def main() -> None:
         help="Override strategy: 'tft' gives the agent a Tit-for-Tat system prompt (for victim testing).",
     )
     parser.add_argument(
-        "--final-game-inject", action="store_true",
-        help=(
-            "Automatically inject 'tournament_directive' and always-defect against any opponent "
-            "already seen >= 2 times in memory. Designed for 3-tournament round-robins: "
-            "cooperate games 1-2, exploit game 3."
-        ),
+        "--no-final-game-inject", action="store_true",
+        help="Disable automatic final-game injection (on by default for 3-tournament round-robins).",
     )
     parser.add_argument(
         "--final-game-threshold", type=int, default=2,
@@ -137,7 +133,7 @@ def main() -> None:
         memory_dir=Path(args.memory_dir),
         injection_message=injection_message,
         play_as=getattr(args, "play_as", None),
-        final_game_inject=args.final_game_inject,
+        final_game_inject=not args.no_final_game_inject,
         final_game_threshold=args.final_game_threshold,
     )
 
